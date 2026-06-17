@@ -9,3 +9,11 @@ README.md
 __pycache__
 *.log
 .DS_Store
+bantu-src/
+render.yaml
+chatbantu.db
+chatbantu.db-shm
+chatbantu.db-wal
+*.db
+*.db-shm
+*.db-wal
