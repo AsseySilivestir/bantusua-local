@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ChatBantu — Sign in</title>
+  <link rel="stylesheet" href="/css/styles.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%92%AC%3C/text%3E%3C/svg%3E" />
+</head>
+<body class="auth-body">
+  <div class="auth-card">
+    <div class="auth-brand">
+      <div class="logo">💬</div>
+      <h1>ChatBantu</h1>
+      <p class="tagline">A social network built entirely with <strong>Bantu</strong> + <strong>Sua</strong> + <strong>SQLite</strong>.</p>
+    </div>
+
+    <div class="auth-tabs">
+      <button id="tab-login" class="auth-tab active" onclick="switchTab('login')">Sign in</button>
+      <button id="tab-register" class="auth-tab" onclick="switchTab('register')">Create account</button>
+    </div>
+
+    <form id="login-form" class="auth-form" onsubmit="return doLogin(event)">
+      <label class="field">
+        <span>Username</span>
+        <input type="text" id="login-username" autocomplete="username" required />
+      </label>
+      <label class="field">
+        <span>Password</span>
+        <input type="password" id="login-password" autocomplete="current-password" required />
+      </label>
+      <button class="btn btn-primary btn-block" type="submit">Sign in</button>
+      <p class="hint">Try the demo: <code>silivestir / bantu123</code></p>
+    </form>
+
+    <form id="register-form" class="auth-form hidden" onsubmit="return doRegister(event)">
+      <label class="field">
+        <span>Display name</span>
+        <input type="text" id="reg-display" required />
+      </label>
+      <label class="field">
+        <span>Username</span>
+        <input type="text" id="reg-username" required />
+      </label>
+      <label class="field">
+        <span>Password</span>
+        <input type="password" id="reg-password" required />
+      </label>
+      <button class="btn btn-primary btn-block" type="submit">Create account</button>
+    </form>
+
+    <div id="auth-msg" class="auth-msg"></div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script>
+    // Redirect to feed if already logged in
+    (function() {
+      const token = localStorage.getItem('cb_token');
+      const user  = localStorage.getItem('cb_user');
+      if (token && user) {
+        window.location.href = '/feed.html';
+      }
+    })();
+
+    function switchTab(which) {
+      const loginTab    = document.getElementById('tab-login');
+      const registerTab = document.getElementById('tab-register');
+      const loginForm   = document.getElementById('login-form');
+      const registerForm= document.getElementById('register-form');
+      if (which === 'login') {
+        loginTab.classList.add('active');
+        registerTab.classList.remove('active');
+        loginForm.classList.remove('hidden');
+        registerForm.classList.add('hidden');
+      } else {
+        registerTab.classList.add('active');
+        loginTab.classList.remove('active');
+        registerForm.classList.remove('hidden');
+        loginForm.classList.add('hidden');
+      }
+      hideMsg();
+    }
+
+    function showMsg(text, isError) {
+      const el = document.getElementById('auth-msg');
+      el.textContent = text;
+      el.className = 'auth-msg ' + (isError ? 'error' : 'success');
+    }
+    function hideMsg() {
+      const el = document.getElementById('auth-msg');
+      el.textContent = '';
+      el.className = 'auth-msg';
+    }
+
+    async function doLogin(event) {
+      event.preventDefault();
+      hideMsg();
+      const username = document.getElementById('login-username').value.trim();
+      const password = document.getElementById('login-password').value;
+      try {
+        const res = await api.post('/api/auth/login', { username, password });
+        if (res.error) { showMsg(res.error, true); return false; }
+        localStorage.setItem('cb_token', res.token);
+        localStorage.setItem('cb_user',  JSON.stringify(res.user));
+        window.location.href = '/feed.html';
+      } catch (e) {
+        showMsg('Network error: ' + e.message, true);
+      }
+      return false;
+    }
+
+    async function doRegister(event) {
+      event.preventDefault();
+      hideMsg();
+      const username    = document.getElementById('reg-username').value.trim();
+      const password    = document.getElementById('reg-password').value;
+      const displayName = document.getElementById('reg-display').value.trim();
+      try {
+        const res = await api.post('/api/auth/register', { username, password, displayName });
+        if (res.error) { showMsg(res.error, true); return false; }
+        localStorage.setItem('cb_token', res.token);
+        localStorage.setItem('cb_user',  JSON.stringify(res.user));
+        window.location.href = '/feed.html';
+      } catch (e) {
+        showMsg('Network error: ' + e.message, true);
+      }
+      return false;
+    }
+  </script>
+</body>
+</html>

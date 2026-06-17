@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ChatBantu — Feed</title>
+  <link rel="stylesheet" href="/css/styles.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%92%AC%3C/text%3E%3C/svg%3E" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar"></aside>
+    <main class="main">
+      <div class="page-header">
+        <div>
+          <h1>Feed</h1>
+          <p>See what your network is up to</p>
+        </div>
+        <button class="btn btn-primary" onclick="document.getElementById('composer-body').focus()">+ New post</button>
+      </div>
+
+      <div class="online-strip" id="online-strip"></div>
+
+      <div class="card composer">
+        <textarea id="composer-body" placeholder="Share something with your network..."></textarea>
+        <div class="actions">
+          <button class="btn btn-primary btn-sm" onclick="publishPost()">Post</button>
+        </div>
+      </div>
+
+      <div id="posts"></div>
+    </main>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script>
+    if (!requireAuth()) throw new Error('redirect');
+    renderSidebar('feed');
+
+    async function loadOnline() {
+      try {
+        const r = await api.get('/api/presence');
+        if (r && !r.error) {
+          const strip = document.getElementById('online-strip');
+          strip.innerHTML = r.online.map(u => `
+            <div class="online-chip" onclick="location.href='/chat.html?peer=${u.id}'">
+              <div class="avatar">${avatarLetter(u.displayName)}</div>
+              <div class="name">${escapeHtml(u.displayName.split(' ')[0])}</div>
+              <div class="dot"></div>
+            </div>
+          `).join('') || '<p style="color:#7a6a5a;font-size:13px;padding:4px 8px">No one else is online right now.</p>';
+        }
+      } catch (e) { /* ignore */ }
+    }
+
+    async function loadPosts() {
+      try {
+        const r = await api.get('/api/posts');
+        if (r && r.error) { toast(r.error); return; }
+        const el = document.getElementById('posts');
+        if (!r.posts || r.posts.length === 0) {
+          el.innerHTML = `<div class="card"><div class="empty-state"><div class="icon">📝</div><p>No posts yet. Be the first to share!</p></div></div>`;
+          return;
+        }
+        el.innerHTML = r.posts.map(p => renderPost(p)).join('');
+      } catch (e) {
+        toast('Failed to load posts: ' + e.message);
+      }
+    }
+
+    function renderPost(p) {
+      return `
+        <div class="card post-card" id="post-${p.id}">
+          <div class="post-head">
+            <div class="avatar">${avatarLetter(p.authorName)}</div>
+            <div class="meta">
+              <div class="name">${escapeHtml(p.authorName)} <span style="color:#7a6a5a;font-weight:400">@${escapeHtml(p.authorUsername)}</span></div>
+              <div class="sub">${timeAgo(p.createdAt)}</div>
+            </div>
+          </div>
+          <div class="body">${escapeHtml(p.body)}</div>
+          ${p.image ? `<img class="image" src="${escapeHtml(p.image)}" alt="post image" />` : ''}
+          <div class="actions">
+            <button class="action ${p.liked ? 'liked' : ''}" onclick="toggleLike(${p.id})">
+              <span>${p.liked ? '❤️' : '🤍'}</span><span id="like-count-${p.id}">${p.likes}</span>
+            </button>
+            <button class="action" onclick="toggleComments(${p.id})">
+              <span>💬</span><span id="comment-count-${p.id}">${p.comments}</span>
+            </button>
+            <button class="action" onclick="sharePost(${p.id})">
+              <span>↗</span><span>Share</span>
+            </button>
+          </div>
+          <div class="comments hidden" id="comments-${p.id}"></div>
+        </div>
+      `;
+    }
+
+    async function toggleLike(id) {
+      const r = await api.post('/api/posts/' + id + '/like', {});
+      if (r && !r.error) {
+        const cnt = document.getElementById('like-count-' + id);
+        const btn = cnt.parentElement;
+        cnt.textContent = r.likes;
+        if (r.liked) {
+          btn.classList.add('liked');
+          btn.querySelector('span').textContent = '❤️';
+        } else {
+          btn.classList.remove('liked');
+          btn.querySelector('span').textContent = '🤍';
+        }
+      }
+    }
+
+    let openComments = null;
+    async function toggleComments(id) {
+      const el = document.getElementById('comments-' + id);
+      if (openComments === id) {
+        el.classList.add('hidden');
+        openComments = null;
+        return;
+      }
+      if (el.children.length === 0) {
+        // First open: fetch and render
+        await fetchComments(id);
+      }
+      el.classList.remove('hidden');
+      openComments = id;
+    }
+
+    async function fetchComments(id) {
+      const r = await api.get('/api/posts/' + id + '/comments');
+      if (r && r.error) return;
+      const el = document.getElementById('comments-' + id);
+      el.innerHTML = (r.comments || []).map(c => `
+        <div class="comment">
+          <div class="avatar-sm">${avatarLetter(c.user.displayName)}</div>
+          <div class="bubble">
+            <div class="name">${escapeHtml(c.user.displayName)}</div>
+            <div class="text">${escapeHtml(c.body)}</div>
+            <div class="time">${timeAgo(c.createdAt)}</div>
+          </div>
+        </div>
+      `).join('') + `
+        <div class="comment-form">
+          <input id="comment-input-${id}" placeholder="Write a comment..." onkeydown="if(event.key==='Enter')postComment(${id})" />
+          <button class="btn btn-primary btn-sm" onclick="postComment(${id})">Post</button>
+        </div>
+      `;
+    }
+
+    async function postComment(id) {
+      const inp = document.getElementById('comment-input-' + id);
+      const body = inp.value.trim();
+      if (!body) return;
+      const r = await api.post('/api/posts/' + id + '/comments', { body });
+      if (r && !r.error) {
+        inp.value = '';
+        await fetchComments(id);
+        const cnt = document.getElementById('comment-count-' + id);
+        cnt.textContent = parseInt(cnt.textContent) + 1;
+      }
+    }
+
+    async function publishPost() {
+      const ta = document.getElementById('composer-body');
+      const body = ta.value.trim();
+      if (!body) return;
+      const r = await api.post('/api/posts', { body });
+      if (r && r.error) { toast(r.error); return; }
+      ta.value = '';
+      toast('Posted!');
+      await loadPosts();
+    }
+
+    function sharePost(id) {
+      const url = window.location.origin + '/feed.html';
+      if (navigator.share) {
+        navigator.share({ title: 'ChatBantu post', url }).catch(() => {});
+      } else {
+        navigator.clipboard.writeText(url).then(() => toast('Link copied to clipboard'));
+      }
+    }
+
+    // Initial load
+    loadOnline();
+    loadPosts();
+    // Refresh presence every 30s
+    setInterval(loadOnline, 30000);
+  </script>
+</body>
+</html>

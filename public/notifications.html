@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ChatBantu — Notifications</title>
+  <link rel="stylesheet" href="/css/styles.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%92%AC%3C/text%3E%3C/svg%3E" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar"></aside>
+    <main class="main">
+      <div class="page-header">
+        <div>
+          <h1>Notifications</h1>
+          <p>Recent activity from your network</p>
+        </div>
+      </div>
+      <div id="notif-list" class="card"></div>
+    </main>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script>
+    if (!requireAuth()) throw new Error('redirect');
+    renderSidebar('notifications');
+
+    async function load() {
+      try {
+        const r = await api.get('/api/notifications');
+        if (r && r.error) { toast(r.error); return; }
+        const el = document.getElementById('notif-list');
+        if (!r.notifications || r.notifications.length === 0) {
+          el.innerHTML = '<div class="empty-state"><div class="icon">🔔</div><p>No notifications yet.</p></div>';
+          return;
+        }
+        const iconFor = (t) => ({
+          like: '❤️', comment: '💬', follow: '👥', message: '✉️', call: '📞'
+        }[t] || '🔔');
+        el.innerHTML = r.notifications.map(n => `
+          <div class="notif-item">
+            <div class="icon">${iconFor(n.type)}</div>
+            <div class="body">
+              <div class="text">${escapeHtml(n.body)}</div>
+              <div class="time">${timeAgo(n.createdAt)}</div>
+            </div>
+          </div>
+        `).join('');
+      } catch (e) {
+        toast('Failed to load: ' + e.message);
+      }
+    }
+
+    load();
+  </script>
+</body>
+</html>

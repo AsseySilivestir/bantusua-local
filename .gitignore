@@ -1,0 +1,10 @@
+# Local dev artifacts
+*.db
+*.db-wal
+*.db-shm
+/node_modules
+.env
+.env.local
+.DS_Store
+__pycache__/
+*.log

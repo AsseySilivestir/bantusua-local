@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ChatBantu — Messages</title>
+  <link rel="stylesheet" href="/css/styles.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%92%AC%3C/text%3E%3C/svg%3E" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar"></aside>
+    <main class="main">
+      <div class="page-header">
+        <div>
+          <h1>Messages</h1>
+          <p>Real-time chat via HTTP polling</p>
+        </div>
+      </div>
+
+      <div class="chat-layout">
+        <div class="chat-sidebar">
+          <h3>Conversations</h3>
+          <div id="conv-list"></div>
+        </div>
+        <div class="chat-panel" id="chat-panel">
+          <div class="empty-state">
+            <div class="icon">💬</div>
+            <h2>Select a conversation</h2>
+            <p>Pick someone on the left to start chatting.<br/>Or browse <a href="/people.html">people</a> to find someone new.</p>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script>
+    if (!requireAuth()) throw new Error('redirect');
+    renderSidebar('chat');
+
+    let activePeer = null;
+    let lastMsgId = 0;
+    let pollTimer = null;
+
+    // ─── Load conversation list ─────────────────────────────
+    async function loadConversations() {
+      try {
+        const r = await api.get('/api/conversations');
+        if (r && r.error) return;
+        const el = document.getElementById('conv-list');
+        if (!r.conversations || r.conversations.length === 0) {
+          el.innerHTML = '<p style="color:#7a6a5a;font-size:13px;padding:8px">No conversations yet. <a href="/people.html">Find someone to chat with</a>.</p>';
+          return;
+        }
+        el.innerHTML = r.conversations.map(c => `
+          <div class="conv-item ${activePeer == c.peer.id ? 'active' : ''}" onclick="openChat(${c.peer.id}, '${escapeHtml(c.peer.displayName)}')">
+            <div class="avatar">${avatarLetter(c.peer.displayName)}</div>
+            <div class="info">
+              <div class="name">${escapeHtml(c.peer.displayName)}</div>
+              <div class="last-msg">${escapeHtml(c.lastMessage.body.slice(0, 40))}</div>
+            </div>
+            <div class="dot ${c.peer.online ? '' : 'offline'}"></div>
+          </div>
+        `).join('');
+      } catch (e) { /* ignore */ }
+    }
+
+    // ─── Open a chat with a peer ────────────────────────────
+    async function openChat(peerId, peerName) {
+      activePeer = peerId;
+      lastMsgId = 0;
+      const panel = document.getElementById('chat-panel');
+      panel.innerHTML = `
+        <div class="chat-head">
+          <div class="avatar" id="peer-avatar">${avatarLetter(peerName)}</div>
+          <div>
+            <div class="name" id="peer-name">${escapeHtml(peerName)}</div>
+            <div class="status" id="peer-status">connecting…</div>
+          </div>
+          <div class="call-btns">
+            <button class="call-btn" title="Voice call" onclick="startCall('${escapeHtml(peerName)}', ${peerId}, false)">📞</button>
+            <button class="call-btn" title="Video call" onclick="startCall('${escapeHtml(peerName)}', ${peerId}, true)">📹</button>
+          </div>
+        </div>
+        <div class="chat-messages" id="chat-messages"></div>
+        <div class="chat-input">
+          <input id="msg-input" placeholder="Type a message..." onkeydown="if(event.key==='Enter')sendMsg()" autofocus />
+          <button class="btn btn-primary" onclick="sendMsg()">Send</button>
+        </div>
+      `;
+      document.getElementById('msg-input').focus();
+      // Refresh conversation list highlight
+      await loadConversations();
+      // Pull initial messages
+      await pollMessages();
+      // Start polling every 1.5s
+      if (pollTimer) clearInterval(pollTimer);
+      pollTimer = setInterval(pollMessages, 1500);
+    }
+
+    async function pollMessages() {
+      if (!activePeer) return;
+      try {
+        const r = await api.get('/api/messages/' + activePeer + '?since=' + lastMsgId);
+        if (r && r.error) return;
+        const msgs = r.messages || [];
+        const me = api.user();
+        const box = document.getElementById('chat-messages');
+        if (!box) return;
+        let scrolled = false;
+        msgs.forEach(m => {
+          if (m.id > lastMsgId) {
+            const mine = m.fromId == me.id;
+            const div = document.createElement('div');
+            div.className = 'msg-bubble ' + (mine ? 'me' : 'them');
+            div.innerHTML = escapeHtml(m.body) + '<span class="time">' + (m.createdAt || '').slice(11, 16) + '</span>';
+            box.appendChild(div);
+            lastMsgId = m.id;
+            scrolled = true;
+          }
+        });
+        if (scrolled) {
+          box.scrollTop = box.scrollHeight;
+        }
+      } catch (e) { /* ignore */ }
+    }
+
+    async function sendMsg() {
+      if (!activePeer) return;
+      const inp = document.getElementById('msg-input');
+      const body = inp.value.trim();
+      if (!body) return;
+      inp.value = '';
+      try {
+        const r = await api.post('/api/messages/' + activePeer, { body });
+        if (r && r.error) { toast(r.error); return; }
+        await pollMessages();
+      } catch (e) {
+        toast('Failed to send: ' + e.message);
+      }
+    }
+
+    function startCall(peerName, peerId, video) {
+      const params = new URLSearchParams({ peer: peerId, name: peerName, video: video ? '1' : '0', dir: 'out' });
+      window.open('/call.html?' + params.toString(), '_blank', 'width=1100,height=800');
+    }
+
+    // ─── Bootstrap ──────────────────────────────────────────
+    (async function init() {
+      const params = new URLSearchParams(location.search);
+      const peer = params.get('peer');
+      if (peer) {
+        // Need to find the peer's display name first
+        try {
+          const users = await api.get('/api/users');
+          const u = (users.users || []).find(x => x.id == peer);
+          const name = u ? u.displayName : 'User';
+          await loadConversations();
+          openChat(parseInt(peer), name);
+          return;
+        } catch (e) { /* fall through */ }
+      }
+      await loadConversations();
+      // Refresh conversation list every 5s
+      setInterval(loadConversations, 5000);
+    })();
+  </script>
+</body>
+</html>

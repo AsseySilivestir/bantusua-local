@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ChatBantu — Video Call</title>
+  <link rel="stylesheet" href="/css/styles.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%B9%3C/text%3E%3C/svg%3E" />
+</head>
+<body class="call-page">
+  <div style="width:100%;max-width:1100px;">
+    <div class="call-status" id="call-status">Initializing…</div>
+    <div class="call-container">
+      <div class="call-video-box">
+        <video id="local-video" autoplay muted playsinline></video>
+        <div class="label">You</div>
+      </div>
+      <div class="call-video-box">
+        <video id="remote-video" autoplay playsinline></video>
+        <div class="label" id="remote-label">Remote</div>
+      </div>
+      <div class="call-controls">
+        <button class="btn-circle" id="btn-mute" onclick="toggleMute()" title="Mute">🎤</button>
+        <button class="btn-circle" id="btn-video" onclick="toggleVideo()" title="Toggle video">📹</button>
+        <button class="btn-circle end" onclick="endCall()" title="End call">📵</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script>
+    if (!requireAuth()) throw new Error('redirect');
+
+    // ─── Parse call params ───────────────────────────────
+    const params  = new URLSearchParams(location.search);
+    const peerId  = parseInt(params.get('peer'));
+    const peerName= params.get('name') || 'User';
+    const wantVideo = params.get('video') === '1';
+    const direction  = params.get('dir') || 'out';   // 'out' = caller, 'in' = callee
+
+    document.getElementById('remote-label').textContent = peerName;
+
+    // ─── WebRTC setup ────────────────────────────────────
+    const STUN_SERVERS = {
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' }
+      ]
+    };
+    let pc = null;
+    let localStream = null;
+    let remoteStream = null;
+    let muted = false;
+    let videoOff = false;
+    let icePollTimer = null;
+    let offerPollTimer = null;
+
+    function setStatus(text) {
+      document.getElementById('call-status').textContent = text;
+    }
+
+    async function getLocalMedia() {
+      try {
+        localStream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+          video: wantVideo
+        });
+      } catch (e) {
+        // Fallback: audio-only
+        try {
+          localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+          toast('Camera unavailable — falling back to audio-only');
+        } catch (e2) {
+          throw new Error('Cannot access microphone/camera: ' + e2.message);
+        }
+      }
+      document.getElementById('local-video').srcObject = localStream;
+    }
+
+    function createPeerConnection() {
+      pc = new RTCPeerConnection(STUN_SERVERS);
+      // Add local tracks
+      localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+      // Receive remote tracks
+      remoteStream = new MediaStream();
+      document.getElementById('remote-video').srcObject = remoteStream;
+      pc.ontrack = (event) => {
+        event.streams[0].getTracks().forEach(t => remoteStream.addTrack(t));
+      };
+      // ICE candidates → push to signaling server
+      pc.onicecandidate = (event) => {
+        if (event.candidate) {
+          api.post('/api/call/ice/' + peerId, { candidate: JSON.stringify(event.candidate) }).catch(() => {});
+        }
+      };
+      pc.onconnectionstatechange = () => {
+        setStatus('Connection: ' + pc.connectionState);
+      };
+    }
+
+    async function startAsCaller() {
+      setStatus('Calling ' + peerName + '…');
+      await getLocalMedia();
+      createPeerConnection();
+      const offer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true });
+      await pc.setLocalDescription(offer);
+      await api.post('/api/call/offer/' + peerId, { sdp: JSON.stringify(offer) });
+      // Poll for answer
+      offerPollTimer = setInterval(async () => {
+        try {
+          const r = await api.get('/api/call/answer/' + peerId);
+          if (r.hasAnswer) {
+            clearInterval(offerPollTimer);
+            offerPollTimer = null;
+            const answer = JSON.parse(r.sdp);
+            await pc.setRemoteDescription(new RTCSessionDescription(answer));
+            setStatus('Connected — call in progress');
+            startIcePolling();
+          }
+        } catch (e) { /* ignore */ }
+      }, 1000);
+    }
+
+    async function startAsCallee() {
+      setStatus('Incoming call from ' + peerName + ' — accepting…');
+      await getLocalMedia();
+      createPeerConnection();
+      // Poll for offer
+      const pollOffer = setInterval(async () => {
+        try {
+          const r = await api.get('/api/call/offer/' + peerId);
+          if (r.hasOffer) {
+            clearInterval(pollOffer);
+            const offer = JSON.parse(r.sdp);
+            await pc.setRemoteDescription(new RTCSessionDescription(offer));
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            await api.post('/api/call/answer/' + peerId, { sdp: JSON.stringify(answer) });
+            setStatus('Connected — call in progress');
+            startIcePolling();
+          }
+        } catch (e) { /* ignore */ }
+      }, 1000);
+      // Stop polling after 30s if no offer
+      setTimeout(() => clearInterval(pollOffer), 30000);
+    }
+
+    function startIcePolling() {
+      if (icePollTimer) return;
+      icePollTimer = setInterval(async () => {
+        try {
+          const r = await api.get('/api/call/ice/' + peerId);
+          if (r.candidates) {
+            for (const c of r.candidates) {
+              try {
+                await pc.addIceCandidate(new RTCIceCandidate(JSON.parse(c)));
+              } catch (e) { /* ignore */ }
+            }
+          }
+        } catch (e) { /* ignore */ }
+      }, 1000);
+    }
+
+    function toggleMute() {
+      if (!localStream) return;
+      muted = !muted;
+      localStream.getAudioTracks().forEach(t => t.enabled = !muted);
+      document.getElementById('btn-mute').textContent = muted ? '🔇' : '🎤';
+    }
+
+    function toggleVideo() {
+      if (!localStream) return;
+      videoOff = !videoOff;
+      localStream.getVideoTracks().forEach(t => t.enabled = !videoOff);
+      document.getElementById('btn-video').textContent = videoOff ? '🚫' : '📹';
+    }
+
+    async function endCall() {
+      if (icePollTimer) clearInterval(icePollTimer);
+      if (offerPollTimer) clearInterval(offerPollTimer);
+      try { await api.post('/api/call/hangup/' + peerId, {}); } catch (e) {}
+      if (pc) { try { pc.close(); } catch (e) {} pc = null; }
+      if (localStream) localStream.getTracks().forEach(t => t.stop());
+      setStatus('Call ended');
+      setTimeout(() => window.close(), 1500);
+    }
+
+    // Cleanup on tab close
+    window.addEventListener('beforeunload', () => {
+      if (pc) { try { pc.close(); } catch (e) {} }
+      if (localStream) localStream.getTracks().forEach(t => t.stop());
+      try { api.post('/api/call/hangup/' + peerId, {}); } catch (e) {}
+    });
+
+    // Bootstrap
+    (async function() {
+      try {
+        if (direction === 'out') {
+          await startAsCaller();
+        } else {
+          await startAsCallee();
+        }
+      } catch (e) {
+        setStatus('Error: ' + e.message);
+        toast(e.message, 5000);
+      }
+    })();
+  </script>
+</body>
+</html>

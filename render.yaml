@@ -1,0 +1,19 @@
+# Render Blueprint for ChatBantu
+# Docs: https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: chatbantu
+    runtime: docker
+    plan: free
+    region: ohio   # change as needed
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: PORT
+        value: 8080
+    disk:
+      name: chatbantu-data
+      mountPath: /data
+      sizeGB: 1

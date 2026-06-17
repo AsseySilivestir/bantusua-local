@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ChatBantu — People</title>
+  <link rel="stylesheet" href="/css/styles.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%92%AC%3C/text%3E%3C/svg%3E" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar"></aside>
+    <main class="main">
+      <div class="page-header">
+        <div>
+          <h1>People</h1>
+          <p>Discover and connect with other Bantu users</p>
+        </div>
+      </div>
+      <div id="user-grid" class="user-grid"></div>
+    </main>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script>
+    if (!requireAuth()) throw new Error('redirect');
+    renderSidebar('people');
+
+    async function load() {
+      try {
+        const r = await api.get('/api/users');
+        if (r && r.error) { toast(r.error); return; }
+        const el = document.getElementById('user-grid');
+        if (!r.users || r.users.length === 0) {
+          el.innerHTML = '<div class="card"><div class="empty-state"><div class="icon">👥</div><p>No other users yet.</p></div></div>';
+          return;
+        }
+        el.innerHTML = r.users.map(u => `
+          <div class="user-card">
+            <div class="presence-dot ${u.online ? 'online' : ''}"></div>
+            <div class="avatar">${avatarLetter(u.displayName)}</div>
+            <div class="name">${escapeHtml(u.displayName)}</div>
+            <div class="uname">@${escapeHtml(u.username)}</div>
+            <div class="bio">${escapeHtml(u.bio || '')}</div>
+            <div class="actions">
+              <button class="btn ${u.isFollowing ? 'btn-ghost' : 'btn-primary'} btn-sm" onclick="toggleFollow(${u.id}, this)">
+                ${u.isFollowing ? 'Following ✓' : '+ Follow'}
+              </button>
+              <button class="btn btn-accent btn-sm" onclick="location.href='/chat.html?peer=${u.id}'">Message</button>
+            </div>
+          </div>
+        `).join('');
+      } catch (e) {
+        toast('Failed to load: ' + e.message);
+      }
+    }
+
+    async function toggleFollow(id, btn) {
+      if (btn.textContent.trim().startsWith('Following')) {
+        const r = await api.del('/api/users/' + id + '/follow');
+        if (r && !r.error) {
+          btn.textContent = '+ Follow';
+          btn.classList.remove('btn-ghost');
+          btn.classList.add('btn-primary');
+        }
+      } else {
+        const r = await api.post('/api/users/' + id + '/follow', {});
+        if (r && !r.error) {
+          btn.textContent = 'Following ✓';
+          btn.classList.remove('btn-primary');
+          btn.classList.add('btn-ghost');
+          toast('Followed!');
+        }
+      }
+    }
+
+    load();
+    setInterval(load, 30000);
+  </script>
+</body>
+</html>
