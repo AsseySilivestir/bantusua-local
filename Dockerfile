@@ -9,16 +9,25 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=Africa/Dar_es_Salaam
 
 # Install only what the Bantu binary needs:
-#   - libsqlite3-0  → SQLite runtime
-#   - libcurl-gnutls4 → HTTP client runtime (Bantu binary depends on this)
-#   - ca-certificates → for HTTPS
-#   - sqlite3 → optional, for manual DB inspection
-RUN apt-get update && apt-get install -y --no-install-recommends \
+#   - libsqlite3-0     → provides libsqlite3.so.0 (SQLite runtime)
+#   - libcurl*-gnutls  → provides libcurl-gnutls.so.4 (Bantu binary depends on this)
+#   - ca-certificates  → for HTTPS
+#   - sqlite3          → optional, for manual DB inspection
+# NOTE: The package providing libcurl-gnutls.so.4 is named differently
+#       across Ubuntu releases:
+#         - 22.04 (jammy)  → libcurl3-gnutls
+#         - 24.04 (noble)  → libcurl3t64-gnutls
+#       We install whatever apt can find.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
         libsqlite3-0 \
-        libcurl-gnutls4 \
         ca-certificates \
         sqlite3 \
-        && rm -rf /var/lib/apt/lists/*
+    && ( apt-get install -y --no-install-recommends libcurl3-gnutls \
+         || apt-get install -y --no-install-recommends libcurl3t64-gnutls \
+         || apt-get install -y --no-install-recommends libcurl4 \
+       ) \
+    && rm -rf /var/lib/apt/lists/*
 
 # Working directory inside the container
 WORKDIR /app
