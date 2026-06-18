@@ -548,7 +548,8 @@ inline std::string bantu_json(const std::string& name, const std::string& versio
   "entry": "main.b",
   "template": "web",
   "language": "bantu",
-  "bantuVersion": "%%VER%%"
+  "bantuVersion": "%%VER%%",
+  "dependencies": {}
 }
 )JSON";
     replaceAll(s, "%%NAME%%", name);

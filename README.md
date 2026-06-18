@@ -15,6 +15,114 @@ The zip ships with `bantu.exe`, `server.b`, the frontend, and every runtime DLL 
 
 > **Tip:** To rebuild `bantu.exe` from source (e.g. after editing the interpreter), see `bantu-src/compiler/build-win.sh`. It cross-compiles from Linux using llvm-mingw.
 
+## 🚀 Spring Initializer-style workflow (new in v1.2.0)
+
+Starting with Bantu v1.2.0, the interpreter ships with a built-in **PATH integrator** and an **offline package manager** — so you can scaffold, install, and run new Bantu projects with the same ergonomics as `npm init`, `cargo new`, or Spring Initializr. **No internet required.**
+
+### One-time setup (per machine)
+
+Unzip the Windows release (or `./build.sh` on Linux), then from the folder that contains `bantu.exe` (or `bantu`):
+
+```bash
+bantu setup --seed
+```
+
+This will:
+1. Copy the `bantu` binary (and its sibling DLLs on Windows) to `~/.local/bin/` (Linux) or `%USERPROFILE%\.bantu\bin\` (Windows).
+2. Add that directory to your user `PATH` (`~/.bashrc` on Linux, `HKCU\Environment\Path` on Windows via PowerShell).
+3. Seed the **local package registry** at `~/.bantu/registry/` with three starter packages: `math-utils`, `string-utils`, `http-utils`.
+
+After that, **open a new terminal** (or in VSCode: `Ctrl+Shift+P` → "Terminal: Kill All" and reopen). Verify:
+
+```bash
+bantu --version      # → Bantu v1.2.0
+bantu doctor         # → full diagnostics
+```
+
+### Create a new project
+
+```bash
+bantu init myproject          # CLI project (Hello World)
+bantu init --web webshop      # Sua web app (server.b + frontend + Dockerfile + render.yaml)
+```
+
+Each scaffolded project includes a `bantu.json` manifest with an empty `dependencies` block, ready to be filled by `bantu add`.
+
+### Install packages (offline)
+
+```bash
+cd myproject
+bantu search                   # browse the local registry (offline)
+bantu add math-utils           # install + add to bantu.json
+bantu add string-utils@1.0.0   # pin a specific version
+bantu list                     # show what's installed in ./bantu_modules/
+bantu install                  # reinstall everything from bantu.json
+bantu update                   # update every dep to its newest local version
+bantu remove string-utils      # uninstall + drop from bantu.json
+```
+
+### Publish your own packages (offline)
+
+Any folder with a `package.json` + `.b` source files can be published to the local registry:
+
+```bash
+mkdir my-pkg
+cat > my-pkg/package.json <<EOF
+{
+  "name": "my-pkg",
+  "version": "1.0.0",
+  "main": "index.b",
+  "description": "My custom Bantu package"
+}
+EOF
+echo 'def hello() { print "hi from my-pkg"; }' > my-pkg/index.b
+
+bantu publish my-pkg           # → ~/.bantu/registry/my-pkg/1.0.0/
+bantu publish my-pkg --as shared-utils   # publish under a different name
+```
+
+Now any project on this machine can `bantu add my-pkg`. No internet, no registry server, no auth tokens — perfect for VSCode offline workflows.
+
+### Full command reference
+
+```
+PATH INTEGRATION
+  bantu setup                  One-time PATH install (user, no sudo)
+  bantu setup --system         System-wide (needs sudo / admin)
+  bantu setup --seed           Also seed the local registry with starters
+  bantu uninstall              Remove bantu from PATH
+  bantu doctor                 Diagnose install + registry state
+
+PROJECT CREATION
+  bantu init <name>            New CLI project
+  bantu init --web <name>      New Sua web app (Spring Initializer-style)
+  bantu new <name>             Alias of init
+
+PACKAGE MANAGER (offline, npm-style)
+  bantu install                Install all deps from bantu.json
+  bantu add <pkg>[@<ver>]      Add a dep + install it
+  bantu remove <pkg>           Remove a dep + uninstall it
+  bantu update [pkg]           Update one or all deps to latest
+  bantu list                   Show installed packages in this project
+  bantu search [term]          Browse the local registry
+  bantu publish <dir> [--as <n>]   Add a folder to the local registry
+
+RUNNING CODE
+  bantu run [file.b]           Run a Bantu file (default: main.b)
+  bantu build [file.b]         Compile to a standalone shell-script exe
+  bantu                        Start the REPL
+  bantu relay [port]           Start the STUN/TURN relay server
+```
+
+### Where things live
+
+| Path | Purpose |
+|------|---------|
+| `~/.local/bin/bantu` (Linux) / `%USERPROFILE%\.bantu\bin\bantu.exe` (Windows) | Installed binary |
+| `~/.bantu/registry/<pkg>/<version>/` | Local package registry (offline) |
+| `./bantu_modules/<pkg>/` | Project-local installed packages |
+| `./bantu.json` | Project manifest (name, version, entry, dependencies) |
+
 ## What is this?
 
 ChatBantu is a real-world test of whether Bantu can serve a production-style web app on its own. It can. The backend is a single `server.b` file interpreted by the native Bantu binary; the frontend is plain HTML, CSS, and JavaScript.
@@ -34,7 +142,7 @@ ChatBantu is a real-world test of whether Bantu can serve a production-style web
 
 | Layer        | Technology                                  |
 |--------------|---------------------------------------------|
-| Language     | [Bantu](https://github.com/AsseySilivestir/bantu-lang) v1.1.0 |
+| Language     | [Bantu](https://github.com/AsseySilivestir/bantu-lang) v1.2.0 |
 | Web framework| Sua (built into Bantu)                      |
 | Database     | SQLite 3 (file-based)                       |
 | Frontend     | Vanilla HTML / CSS / JS (no framework)      |

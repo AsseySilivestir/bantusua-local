@@ -25,6 +25,7 @@
 #include "environment.hpp"
 #include "server.hpp"
 #include "init_templates.hpp"
+#include "package_manager.hpp"
 
 #include <iostream>
 #include <fstream>
@@ -47,7 +48,7 @@
     #include <unistd.h>
 #endif
 
-const std::string BANTU_VERSION = "1.1.0";
+const std::string BANTU_VERSION = "1.2.0";
 const std::string BANTU_LANG = "Bantu";
 
 // ─── Helpers ──────────────────────────────────────────────────────────
@@ -114,25 +115,47 @@ void printHelp() {
     std::cout << "  Bantu Programming Language v" << BANTU_VERSION << "\n";
     std::cout << "  ─────────────────────────────────────\n";
     std::cout << "\n";
+    std::cout << "  GETTING STARTED:\n";
+    std::cout << "    bantu setup              Add bantu to PATH (user install)\n";
+    std::cout << "    bantu setup --system     Add bantu to PATH (needs sudo/admin)\n";
+    std::cout << "    bantu setup --seed       Also seed local registry with starter packages\n";
+    std::cout << "    bantu uninstall          Remove bantu from PATH\n";
+    std::cout << "    bantu doctor             Diagnose install + registry state\n";
+    std::cout << "\n";
     std::cout << "  COMMANDS:\n";
-    std::cout << "    bantu                  Start REPL\n";
-    std::cout << "    bantu run <file.b>     Run a Bantu file\n";
-    std::cout << "    bantu run              Run main.b in current dir\n";
-    std::cout << "    bantu build <file.b>   Compile to executable\n";
-    std::cout << "    bantu build            Build main.b in current dir\n";
-    std::cout << "    bantu init <name>      Create a new Bantu project (CLI)\n";
-    std::cout << "    bantu init --web <n>   Create a Sua web app (Spring Initializer-style)\n";
-    std::cout << "    bantu new <name>       Alias of init\n";
-    std::cout << "    bantu relay [port]    Start STUN/TURN relay server\n";
-    std::cout << "    bantu --help           Show this help\n";
-    std::cout << "    bantu --version        Show version\n";
+    std::cout << "    bantu                    Start REPL\n";
+    std::cout << "    bantu run <file.b>       Run a Bantu file\n";
+    std::cout << "    bantu run                Run main.b in current dir\n";
+    std::cout << "    bantu build <file.b>     Compile to executable\n";
+    std::cout << "    bantu build              Build main.b in current dir\n";
+    std::cout << "    bantu init <name>        Create a new CLI Bantu project\n";
+    std::cout << "    bantu init --web <n>     Create a Sua web app (Spring Initializer-style)\n";
+    std::cout << "    bantu new <name>         Alias of init\n";
+    std::cout << "    bantu relay [port]       Start STUN/TURN relay server\n";
+    std::cout << "\n";
+    std::cout << "  PACKAGE MANAGER (offline, npm-style):\n";
+    std::cout << "    bantu install            Install all deps from bantu.json\n";
+    std::cout << "    bantu add <pkg>          Add a dep + install it\n";
+    std::cout << "    bantu add <pkg>@<ver>    Pin a specific version\n";
+    std::cout << "    bantu remove <pkg>       Remove a dep + uninstall it\n";
+    std::cout << "    bantu update             Update all deps to latest\n";
+    std::cout << "    bantu update <pkg>       Update one dep to latest\n";
+    std::cout << "    bantu list               List installed packages in this project\n";
+    std::cout << "    bantu search [term]      Search local registry (offline)\n";
+    std::cout << "    bantu publish <dir>      Add a folder to local registry\n";
+    std::cout << "    bantu publish <dir> --as <n>   Publish under a different name\n";
+    std::cout << "\n";
+    std::cout << "  GLOBAL FLAGS:\n";
+    std::cout << "    bantu --help             Show this help\n";
+    std::cout << "    bantu --version          Show version\n";
     std::cout << "\n";
     std::cout << "  EXAMPLES:\n";
-    std::cout << "    bantu run hello.b      Run hello.b\n";
-    std::cout << "    bantu run              Run main.b\n";
-    std::cout << "    bantu build app.b      Build app.b -> ./app\n";
-    std::cout << "    bantu init myproject   Create new CLI project\n";
-    std::cout << "    bantu init --web shop  Create new Sua web app 'shop'\n";
+    std::cout << "    bantu setup              # one-time: put bantu on PATH\n";
+    std::cout << "    bantu init myproject     # new CLI project\n";
+    std::cout << "    bantu init --web shop    # new Sua web app 'shop'\n";
+    std::cout << "    cd myproject && bantu run\n";
+    std::cout << "    bantu add math-utils     # install math-utils package\n";
+    std::cout << "    bantu install            # reinstall all deps from bantu.json\n";
     std::cout << "\n";
     std::cout << "  KEYWORDS:\n";
     std::cout << "    def, if, else, while, for, each..in,\n";
@@ -440,8 +463,10 @@ int cmdInit(const std::string& projectName) {
         "  \"name\": \"" + projectName + "\",\n"
         "  \"version\": \"1.0.0\",\n"
         "  \"entry\": \"main.b\",\n"
+        "  \"template\": \"cli\",\n"
         "  \"language\": \"bantu\",\n"
-        "  \"bantuVersion\": \"" + BANTU_VERSION + "\"\n"
+        "  \"bantuVersion\": \"" + BANTU_VERSION + "\",\n"
+        "  \"dependencies\": {}\n"
         "}\n";
 
     writeFile(projectName + "/bantu.json", configContent);
@@ -468,6 +493,8 @@ int cmdInit(const std::string& projectName) {
     std::cout << "  Next steps:\n";
     std::cout << "    cd " << projectName << "\n";
     std::cout << "    bantu run main.b\n";
+    std::cout << "    bantu add math-utils      # add a package\n";
+    std::cout << "    bantu search              # browse local registry\n";
 
     return 0;
 }
@@ -594,6 +621,170 @@ int cmdRelay(int port) {
     return 0;
 }
 
+// ─── bantu setup / bantu uninstall / bantu doctor ───────────────────
+// PATH integration. These just delegate to package_manager.hpp.
+
+int cmdSetup(int argc, char* argv[]) {
+    bool systemWide = false;
+    bool seed = false;
+    for (int i = 2; i < argc; ++i) {
+        std::string a = argv[i];
+        if (a == "--system" || a == "-s") systemWide = true;
+        else if (a == "--seed")           seed = true;
+        else if (a == "--user" || a == "-u") systemWide = false;
+        else if (a == "--help" || a == "-h") {
+            std::cout << "  Usage:\n";
+            std::cout << "    bantu setup              Add bantu to PATH (user install)\n";
+            std::cout << "    bantu setup --system     Add bantu to PATH (system-wide; needs sudo)\n";
+            std::cout << "    bantu setup --seed       Also seed local registry with starter packages\n";
+            std::cout << "    bantu uninstall          Remove bantu from PATH\n";
+            return 0;
+        }
+    }
+
+    std::cout << "\n";
+    std::cout << "  ╔══════════════════════════════════════════╗\n";
+    std::cout << "  ║   Bantu PATH Integration v" << BANTU_VERSION << "           ║\n";
+    std::cout << "  ╚══════════════════════════════════════════╝\n\n";
+
+    if (!bantu_pkg::installToPath(systemWide)) {
+        std::cerr << "\n  [FAIL] PATH integration failed.\n";
+        return 1;
+    }
+
+    if (seed) {
+        std::cout << "\n  ── Seeding local registry with starter packages ──\n";
+        int n = bantu_pkg::seedStarterRegistry();
+        std::cout << "  [OK] Seeded " << n << " starter packages into "
+                  << bantu_pkg::getRegistryDir() << "\n";
+        std::cout << "       Run 'bantu search' to see them.\n";
+    }
+
+    std::cout << "\n  ────────────────────────────\n";
+    std::cout << "  Done. Verify with:\n";
+    std::cout << "    bantu --version\n";
+    std::cout << "    bantu doctor\n";
+    std::cout << "\n";
+    return 0;
+}
+
+int cmdUninstall() {
+    std::cout << "\n  Removing bantu from PATH...\n\n";
+    if (!bantu_pkg::removeFromPath()) {
+        std::cerr << "  [WARN] Could not fully clean PATH entries.\n";
+    }
+    std::cout << "\n  [OK] Done. The bantu binary itself was NOT deleted from disk.\n";
+    std::cout << "       Manually remove " << bantu_pkg::getUserInstallBinDir()
+              << " if you want a full uninstall.\n";
+    return 0;
+}
+
+int cmdDoctor() {
+    return bantu_pkg::runDoctor();
+}
+
+// ─── bantu install / add / remove / update / list / search / publish ─
+// Offline package manager. All delegate to package_manager.hpp.
+
+int cmdInstall() {
+    std::cout << "\n  Installing all dependencies from bantu.json...\n\n";
+    int n = bantu_pkg::installAllFromManifest();
+    return (n < 0) ? 1 : 0;
+}
+
+int cmdAdd(int argc, char* argv[]) {
+    if (argc < 3) {
+        std::cerr << "  [ERROR] Package name required.\n";
+        std::cerr << "  Usage: bantu add <pkg-name>\n";
+        std::cerr << "         bantu add <pkg-name>@<version>\n";
+        return 1;
+    }
+    std::cout << "\n";
+    bool any = false;
+    for (int i = 2; i < argc; ++i) {
+        std::string a = argv[i];
+        if (a == "--help" || a == "-h") {
+            std::cout << "  Usage: bantu add <pkg-name>[@<version>]\n";
+            return 0;
+        }
+        if (!a.empty() && a[0] == '-') continue;
+        std::cout << "  ── Adding " << a << " ──\n";
+        if (bantu_pkg::addDependency(a)) any = true;
+    }
+    if (!any) {
+        std::cerr << "  [ERROR] No package name provided.\n";
+        return 1;
+    }
+    return 0;
+}
+
+int cmdRemove(int argc, char* argv[]) {
+    if (argc < 3) {
+        std::cerr << "  [ERROR] Package name required.\n";
+        std::cerr << "  Usage: bantu remove <pkg-name>\n";
+        return 1;
+    }
+    std::cout << "\n";
+    for (int i = 2; i < argc; ++i) {
+        std::string a = argv[i];
+        if (!a.empty() && a[0] == '-') continue;
+        bantu_pkg::removeDependency(a);
+    }
+    return 0;
+}
+
+int cmdUpdate(int argc, char* argv[]) {
+    std::cout << "\n";
+    if (argc < 3) {
+        std::cout << "  Updating all dependencies to latest...\n\n";
+        int n = bantu_pkg::updateAll();
+        return (n < 0) ? 1 : 0;
+    }
+    int rc = 0;
+    for (int i = 2; i < argc; ++i) {
+        std::string a = argv[i];
+        if (!a.empty() && a[0] == '-') continue;
+        std::cout << "  ── Updating " << a << " ──\n";
+        if (!bantu_pkg::updatePackage(a)) rc = 1;
+    }
+    return rc;
+}
+
+int cmdList() {
+    bantu_pkg::listInstalled();
+    return 0;
+}
+
+int cmdSearch(int argc, char* argv[]) {
+    std::string term = (argc >= 3) ? std::string(argv[2]) : "";
+    bantu_pkg::searchRegistry(term);
+    return 0;
+}
+
+int cmdPublish(int argc, char* argv[]) {
+    std::string dir;
+    std::string asName;
+    for (int i = 2; i < argc; ++i) {
+        std::string a = argv[i];
+        if (a == "--as" && i + 1 < argc) {
+            asName = argv[++i];
+        } else if (a == "--help" || a == "-h") {
+            std::cout << "  Usage: bantu publish <folder> [--as <name>]\n";
+            std::cout << "  The folder must contain package.json + .b source files.\n";
+            return 0;
+        } else if (!a.empty() && a[0] != '-') {
+            dir = a;
+        }
+    }
+    if (dir.empty()) {
+        std::cerr << "  [ERROR] Folder required.\n";
+        std::cerr << "  Usage: bantu publish <folder> [--as <name>]\n";
+        return 1;
+    }
+    std::cout << "\n  Publishing " << dir << "...\n\n";
+    return bantu_pkg::publishPackage(dir, asName) ? 0 : 1;
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────
 
 int main(int argc, char* argv[]) {
@@ -678,6 +869,20 @@ int main(int argc, char* argv[]) {
         }
         return cmdRelay(port);
     }
+
+    // ─── bantu setup / uninstall / doctor (PATH integration) ───
+    if (command == "setup")  return cmdSetup(argc, argv);
+    if (command == "uninstall" || command == "unlink") return cmdUninstall();
+    if (command == "doctor") return cmdDoctor();
+
+    // ─── bantu install / add / remove / update / list / search / publish ─
+    if (command == "install" || command == "i")  return cmdInstall();
+    if (command == "add"      || command == "a")  return cmdAdd(argc, argv);
+    if (command == "remove"   || command == "rm") return cmdRemove(argc, argv);
+    if (command == "update"   || command == "up") return cmdUpdate(argc, argv);
+    if (command == "list"     || command == "ls") return cmdList();
+    if (command == "search"   || command == "find") return cmdSearch(argc, argv);
+    if (command == "publish"  || command == "pub") return cmdPublish(argc, argv);
 
     // ─── bantu <file.b> (legacy shorthand for run) ───
     if (command.size() > 2 && command.substr(command.size() - 2) == ".b") {
