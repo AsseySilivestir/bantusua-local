@@ -33,10 +33,18 @@
 #include <chrono>
 #include <csignal>
 #include <cstdlib>
-#include <sys/stat.h>
-#include <unistd.h>
 #include <bitset>
 #include <cmath>
+
+// ─── Platform-specific POSIX headers ───
+#ifdef _WIN32
+    #include <direct.h>      // _getcwd
+    #include <sys/stat.h>    // stat (works on Windows too)
+    #define getcwd _getcwd
+#else
+    #include <sys/stat.h>
+    #include <unistd.h>
+#endif
 
 const std::string BANTU_VERSION = "1.1.0";
 const std::string BANTU_LANG = "Bantu";
@@ -372,9 +380,15 @@ int cmdInit(const std::string& projectName) {
 
     std::cout << "  Creating project: " << projectName << "\n";
 
-    // Create project directory
-    mkdir(projectName.c_str(), 0755);
-    mkdir((projectName + "/src").c_str(), 0755);
+    // Create project directory.
+    // Windows `mkdir` takes 1 arg, POSIX `mkdir` takes 2 (path, mode).
+#ifdef _WIN32
+    #define BANTU_MKDIR(p) mkdir(p)
+#else
+    #define BANTU_MKDIR(p) mkdir(p, 0755)
+#endif
+    BANTU_MKDIR(projectName.c_str());
+    BANTU_MKDIR((projectName + "/src").c_str());
 
     // Create main.b
     std::string mainContent =

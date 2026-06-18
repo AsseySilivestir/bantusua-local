@@ -2,6 +2,19 @@
 
 A full-featured **social network** built entirely with the **Bantu programming language** and its **Sua** web framework — no Node.js, no Python, no other runtime in the backend. The only thing running on the server is the Bantu interpreter.
 
+## 🪟 Run on Windows — no setup, no internet, no Docker
+
+> **Spring Initializer-style.** Download a zip, unzip, double-click `start.bat`. That's it.
+
+1. Go to **[Releases](https://github.com/AsseySilivestir/bantusua-local/releases)** → download `chatbantu-windows-x64.zip`.
+2. Unzip it anywhere (Desktop, `C:\chatbantu`, a USB stick — doesn't matter).
+3. Double-click **`start.bat`**.
+4. Your browser opens at `http://localhost:8080`. Log in with `silivestir` / `bantu123`.
+
+The zip ships with `bantu.exe`, `server.b`, the frontend, and every runtime DLL the interpreter needs (`sqlite3.dll`, `libcurl-x64.dll`, `libc++.dll`, `libunwind.dll`). Nothing else to install. Works on Windows 10 (1809+) and Windows 11, 64-bit. No admin rights required.
+
+> **Tip:** To rebuild `bantu.exe` from source (e.g. after editing the interpreter), see `bantu-src/compiler/build-win.sh`. It cross-compiles from Linux using llvm-mingw.
+
 ## What is this?
 
 ChatBantu is a real-world test of whether Bantu can serve a production-style web app on its own. It can. The backend is a single `server.b` file interpreted by the native Bantu binary; the frontend is plain HTML, CSS, and JavaScript.

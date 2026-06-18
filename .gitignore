@@ -12,6 +12,11 @@ __pycache__/
 # Build artifacts (regenerate with: cd bantu-src/compiler && ./build.sh)
 bantu-src/compiler/build/
 
+# Windows deps cache (downloaded by win-deps/fetch-deps.sh on demand)
+win-deps/
+# Distribution output (built by scripts/pack-windows.sh)
+dist/
+
 # Editor / OS junk
 *.swp
 *.swo
