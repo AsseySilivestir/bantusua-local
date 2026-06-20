@@ -1,0 +1,156 @@
+{
+  "name": "bantu-vscode",
+  "displayName": "Bantu Language Support",
+  "description": "Syntax highlighting, autocomplete, hover hints, and snippets for the Bantu programming language (v1.2.1). Includes a blue-B file icon for .b files.",
+  "version": "1.2.1",
+  "publisher": "AsseySilivestir",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AsseySilivestir/Bantu.git"
+  },
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Snippets",
+    "Formatters",
+    "Other"
+  ],
+  "keywords": [
+    "bantu",
+    "sua",
+    "web",
+    "interpreter",
+    "tanzania"
+  ],
+  "icon": "icons/extension-icon.png",
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onLanguage:bantu"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "bantu",
+        "aliases": [
+          "Bantu",
+          "bantu"
+        ],
+        "extensions": [
+          ".b"
+        ],
+        "configuration": "./language/bantu-language-configuration.json",
+        "icon": {
+          "light": "./icons/bantu-icon-light.svg",
+          "dark": "./icons/bantu-icon-dark.svg"
+        }
+      }
+    ],
+    "grammars": [
+      {
+        "language": "bantu",
+        "scopeName": "source.bantu",
+        "path": "./syntaxes/bantu.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "bantu",
+        "path": "./snippets/bantu.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "bantu.runFile",
+        "title": "Bantu: Run File",
+        "category": "Bantu",
+        "icon": "$(play)"
+      },
+      {
+        "command": "bantu.initProject",
+        "title": "Bantu: Initialize Project",
+        "category": "Bantu"
+      },
+      {
+        "command": "bantu.initWebProject",
+        "title": "Bantu: Initialize Sua Web Project",
+        "category": "Bantu"
+      },
+      {
+        "command": "bantu.buildWindows",
+        "title": "Bantu: Build Windows Installer",
+        "category": "Bantu"
+      },
+      {
+        "command": "bantu.bench",
+        "title": "Bantu: Run Benchmarks",
+        "category": "Bantu"
+      }
+    ],
+    "menus": {
+      "editor/title/run": [
+        {
+          "command": "bantu.runFile",
+          "when": "resourceLangId == bantu",
+          "group": "navigation"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "bantu.runFile",
+          "when": "resourceLangId == bantu"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "bantu.runFile",
+        "key": "f5",
+        "mac": "f5",
+        "when": "resourceLangId == bantu"
+      }
+    ],
+    "configuration": {
+      "title": "Bantu",
+      "properties": {
+        "bantu.interpreterPath": {
+          "type": "string",
+          "default": "bantu",
+          "description": "Path to the bantu interpreter. Defaults to `bantu` on PATH."
+        },
+        "bantu.enableLanguageServer": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable hover hints and autocomplete (language server)."
+        },
+        "bantu.formatOnSave": {
+          "type": "boolean",
+          "default": false,
+          "description": "Run the Bantu formatter on save."
+        }
+      }
+    },
+    "fileIcons": [
+      {
+        "light": "./icons/bantu-icon-light.svg",
+        "dark": "./icons/bantu-icon-dark.svg",
+        "matcher": [
+          "*.b"
+        ]
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^18.0.0",
+    "@types/vscode": "^1.75.0",
+    "typescript": "^5.0.0"
+  }
+}

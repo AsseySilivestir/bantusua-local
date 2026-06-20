@@ -23,3 +23,11 @@ dist/
 *~
 .idea/
 .vscode/.rope*
+
+# v1.2.1 — VSCode extension build output
+vscode-extension/out/
+vscode-extension/node_modules/
+vscode-extension/*.vsix
+
+# v1.2.1 — Windows installer build output
+dist/

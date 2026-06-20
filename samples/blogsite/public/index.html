@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Bantu Blogsite</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { color: #1E40AF; }
+    pre { background: #f3f4f6; padding: 1rem; border-radius: 4px; overflow: auto; }
+    code { color: #2563EB; }
+  </style>
+</head>
+<body>
+  <h1>Bantu Blogsite</h1>
+  <p>Sua HTTP server running on <code>http://localhost:3000</code>.</p>
+  <h2>API endpoints</h2>
+  <ul>
+    <li><code>GET  /api/health</code> — health check</li>
+    <li><code>GET  /api/posts</code> — list all posts</li>
+    <li><code>GET  /api/posts/:id</code> — fetch one post</li>
+    <li><code>POST /api/posts</code> — create a post (title, body)</li>
+  </ul>
+  <h2>Try it</h2>
+  <pre>curl http://localhost:3000/api/posts
+
+curl -X POST http://localhost:3000/api/posts \
+  -H "Content-Type: application/json" \
+  -d '{"title":"Hello","body":"First post!"}'</pre>
+</body>
+</html>

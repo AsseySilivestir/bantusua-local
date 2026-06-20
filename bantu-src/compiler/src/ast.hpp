@@ -262,3 +262,13 @@ struct BlockNode : ASTNode {
     std::vector<std::shared_ptr<ASTNode>> statements;
     BlockNode(std::vector<std::shared_ptr<ASTNode>> s, int l, int c) : ASTNode(l, c), statements(std::move(s)) {}
 };
+
+// ─── Include (v1.2.1 module system) ───
+//   include "./routes.b";
+//   include "./controller.b" as ctrl;
+struct IncludeNode : ASTNode {
+    std::string path;          // resolved relative path
+    std::string alias;         // empty = direct (symbols into current scope); non-empty = namespaced
+    IncludeNode(std::string p, std::string a, int l, int c)
+        : ASTNode(l, c), path(std::move(p)), alias(std::move(a)) {}
+};

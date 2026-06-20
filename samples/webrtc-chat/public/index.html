@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Bantu WebRTC Chat</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { color: #1E40AF; }
+    input, button { padding: 0.5rem; font-size: 1rem; margin: 0.25rem 0; }
+    button { background: #2563EB; color: white; border: none; border-radius: 4px; cursor: pointer; }
+    #log { background: #f3f4f6; padding: 1rem; border-radius: 4px; min-height: 200px; max-height: 400px; overflow: auto; }
+    .msg { margin: 0.25rem 0; }
+    .me { color: #2563EB; }
+    .them { color: #1E40AF; }
+  </style>
+</head>
+<body>
+  <h1>Bantu WebRTC Chat</h1>
+  <p>Signaling server: <code>http://localhost:4000</code></p>
+  <div>
+    <input id="roomId" placeholder="room id" value="lobby">
+    <input id="peerId" placeholder="your name" value="alice">
+    <button onclick="join()">Join Room</button>
+  </div>
+  <div>
+    <input id="msg" placeholder="message" />
+    <button onclick="send()">Send</button>
+  </div>
+  <div id="log"></div>
+
+<script>
+async function join() {
+  const roomId = document.getElementById('roomId').value;
+  const peerId = document.getElementById('peerId').value;
+  const r = await fetch('/join', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ roomId, peerId })
+  });
+  const data = await r.json();
+  log('Joined room ' + roomId + ' as ' + peerId, 'me');
+  log('Peers in room: ' + JSON.stringify(data.peersInRoom), 'them');
+  log('SDP offer received (' + data.offer.length + ' bytes)', 'them');
+}
+
+async function send() {
+  const msg = document.getElementById('msg').value;
+  const r = await fetch('/send', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ channel: 'chat', message: msg })
+  });
+  const data = await r.json();
+  log('me: ' + msg, 'me');
+}
+
+function log(text, cls) {
+  const div = document.createElement('div');
+  div.className = 'msg ' + cls;
+  div.textContent = text;
+  document.getElementById('log').appendChild(div);
+}
+</script>
+</body>
+</html>

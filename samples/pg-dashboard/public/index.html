@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Bantu PG Dashboard</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; background: #f9fafb; }
+    h1 { color: #1E40AF; }
+    .card { background: white; padding: 1.5rem; border-radius: 8px; margin: 1rem 0; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+    .stat { font-size: 2rem; font-weight: bold; color: #2563EB; }
+    .label { color: #6b7280; font-size: 0.875rem; text-transform: uppercase; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 0.5rem; border-bottom: 1px solid #e5e7eb; }
+    th { color: #6b7280; font-size: 0.875rem; text-transform: uppercase; }
+    button { background: #2563EB; color: white; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h1>Bantu PG Dashboard</h1>
+  <p>Real-time analytics from PostgreSQL via <code>sua.postgres</code>.</p>
+
+  <div class="card">
+    <div class="label">Total Events</div>
+    <div class="stat" id="total">—</div>
+  </div>
+
+  <div class="card">
+    <div class="label">Total Value</div>
+    <div class="stat" id="sum">—</div>
+  </div>
+
+  <div class="card">
+    <h3>Events by Kind</h3>
+    <table>
+      <thead><tr><th>Kind</th><th>Total</th><th>Count</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h3>Track Event</h3>
+    <input id="kind" placeholder="kind" value="page_view" />
+    <input id="value" placeholder="value" value="1" />
+    <button onclick="track()">Track</button>
+    <button onclick="load()">Refresh</button>
+  </div>
+
+<script>
+async function load() {
+  const r = await fetch('/api/metrics');
+  const data = await r.json();
+  document.getElementById('total').textContent = data.metrics.totalEvents;
+  document.getElementById('sum').textContent = data.metrics.totalValue;
+  const rows = document.getElementById('rows');
+  rows.innerHTML = '';
+  data.metrics.byKind.forEach(row => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${row.kind}</td><td>${row.total}</td><td>${row.count}</td>`;
+    rows.appendChild(tr);
+  });
+}
+
+async function track() {
+  const kind = document.getElementById('kind').value;
+  const value = parseInt(document.getElementById('value').value) || 1;
+  await fetch('/api/track', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ kind, value })
+  });
+  load();
+}
+
+load();
+setInterval(load, 5000);
+</script>
+</body>
+</html>

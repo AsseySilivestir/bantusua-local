@@ -271,6 +271,8 @@ private:
             // Module
             {"import",   TokenType::IMPORT},
             {"export",   TokenType::EXPORT},
+            // v1.2.1: module include (Bantu-style imports)
+            {"include",  TokenType::INCLUDE},
 
             // Real-Time (sua framework)
             {"channel",   TokenType::CHANNEL},

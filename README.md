@@ -1,348 +1,226 @@
-# 💬 ChatBantu
+# Bantu
 
-A full-featured **social network** built entirely with the **Bantu programming language** and its **Sua** web framework — no Node.js, no Python, no other runtime in the backend. The only thing running on the server is the Bantu interpreter.
+**Bantu Programming Language v1.2.1 — Stable Release**
 
-## 🪟 Run on Windows — no setup, no internet, no Docker
-
-> **Spring Initializer-style.** Download a zip, unzip, double-click `start.bat`. That's it.
-
-1. Go to **[Releases](https://github.com/AsseySilivestir/bantusua-local/releases)** → download `chatbantu-windows-x64.zip`.
-2. Unzip it anywhere (Desktop, `C:\chatbantu`, a USB stick — doesn't matter).
-3. Double-click **`start.bat`**.
-4. Your browser opens at `http://localhost:8080`. Log in with `silivestir` / `bantu123`.
-
-The zip ships with `bantu.exe`, `server.b`, the frontend, and every runtime DLL the interpreter needs (`sqlite3.dll`, `libcurl-x64.dll`, `libc++.dll`, `libunwind.dll`). Nothing else to install. Works on Windows 10 (1809+) and Windows 11, 64-bit. No admin rights required.
-
-> **Tip:** To rebuild `bantu.exe` from source (e.g. after editing the interpreter), see `bantu-src/compiler/build-win.sh`. It cross-compiles from Linux using llvm-mingw.
-
-## 🚀 Spring Initializer-style workflow (new in v1.2.0)
-
-Starting with Bantu v1.2.0, the interpreter ships with a built-in **PATH integrator** and an **offline package manager** — so you can scaffold, install, and run new Bantu projects with the same ergonomics as `npm init`, `cargo new`, or Spring Initializr. **No internet required.**
-
-### One-time setup (per machine)
-
-Unzip the Windows release (or `./build.sh` on Linux), then from the folder that contains `bantu.exe` (or `bantu`):
+A high-level, dynamically-typed programming language implemented as a tree-walking interpreter in C++17. The entire toolchain — interpreter, package manager, HTTP server, WebRTC engine, SQLite/PostgreSQL/MySQL drivers, project scaffolding, VSCode extension, and Windows installer generator — ships as a single ~660 KB static binary with zero runtime dependencies.
 
 ```bash
-bantu setup --seed
+bantu --version     # → Bantu v1.2.1
+bantu init myapp
+cd myapp && bantu run
 ```
 
-This will:
-1. Copy the `bantu` binary (and its sibling DLLs on Windows) to `~/.local/bin/` (Linux) or `%USERPROFILE%\.bantu\bin\` (Windows).
-2. Add that directory to your user `PATH` (`~/.bashrc` on Linux, `HKCU\Environment\Path` on Windows via PowerShell).
-3. Seed the **local package registry** at `~/.bantu/registry/` with three starter packages: `math-utils`, `string-utils`, `http-utils`.
+## What's New in v1.2.1
 
-After that, **open a new terminal** (or in VSCode: `Ctrl+Shift+P` → "Terminal: Kill All" and reopen). Verify:
+| Feature | Highlights |
+|---|---|
+| **`include` keyword** | Language-level module imports. `include "./routes.b";` (direct) or `include "./ctrl.b" as ctrl;` (namespaced). Path resolution + cycle guard. |
+| **PostgreSQL driver** | `sua.postgres.connect/query/exec/close`. Default binary ships a deterministic stub; build with `-DBANTU_POSTGRES=ON` for real libpq. |
+| **MySQL driver** | `sua.mysql.connect/query/close`. Same stub-or-real pattern via `-DBANTU_MYSQL=ON`. |
+| **WebRTC engine** | `sua.webrtc.peer/createOffer/createAnswer/addIceCandidate/dataChannel/send/close`. Real libdatachannel when built with `-DBANTU_WEBRTC=ON`. |
+| **VSCode extension** | Syntax highlighting, autocomplete, hover hints, Go-to-Symbol, snippets, **blue-B file icon** for `*.b` files, one-click Run (F5). |
+| **`bantu build-windows`** | One command → NSIS `.exe` installer. Bundles interpreter + source + launcher + Start Menu shortcuts + uninstaller. No admin rights required. |
+| **`bantu bench`** | Built-in micro-benchmark suite (fib, loops, list/dict ops, string concat). |
+| **Three sample apps** | `samples/blogsite` (modular Sua + SQLite), `samples/webrtc-chat` (signaling + browser UI), `samples/pg-dashboard` (PostgreSQL analytics). |
+| **PDF documentation** | 30-page official guide at `docs/Bantu-Programming-Language-v1.2.1.pdf`. |
 
-```bash
-bantu --version      # → Bantu v1.2.0
-bantu doctor         # → full diagnostics
-```
-
-### Create a new project
-
-```bash
-bantu init myproject          # CLI project (Hello World)
-bantu init --web webshop      # Sua web app (server.b + frontend + Dockerfile + render.yaml)
-```
-
-Each scaffolded project includes a `bantu.json` manifest with an empty `dependencies` block, ready to be filled by `bantu add`.
-
-### Install packages (offline)
+## Quick Start
 
 ```bash
+# 1. Get the binary
+curl -L -o bantu https://github.com/AsseySilivestir/Bantu/releases/download/v1.2.1/bantu-linux
+chmod +x bantu
+
+# 2. Add to PATH (one-time)
+./bantu setup
+
+# 3. Create a project
+bantu init myproject
 cd myproject
-bantu search                   # browse the local registry (offline)
-bantu add math-utils           # install + add to bantu.json
-bantu add string-utils@1.0.0   # pin a specific version
-bantu list                     # show what's installed in ./bantu_modules/
-bantu install                  # reinstall everything from bantu.json
-bantu update                   # update every dep to its newest local version
-bantu remove string-utils      # uninstall + drop from bantu.json
+
+# 4. Run it
+bantu run
+
+# 5. Scaffold a Sua web app instead
+bantu init --web shop
+cd shop && bantu run server.b
 ```
 
-### Publish your own packages (offline)
+## Hello, Bantu!
 
-Any folder with a `package.json` + `.b` source files can be published to the local registry:
+```bantu
+// hello.b
+print("Hello, Bantu!");
+```
 
 ```bash
-mkdir my-pkg
-cat > my-pkg/package.json <<EOF
-{
-  "name": "my-pkg",
-  "version": "1.0.0",
-  "main": "index.b",
-  "description": "My custom Bantu package"
-}
-EOF
-echo 'def hello() { print "hi from my-pkg"; }' > my-pkg/index.b
-
-bantu publish my-pkg           # → ~/.bantu/registry/my-pkg/1.0.0/
-bantu publish my-pkg --as shared-utils   # publish under a different name
+bantu run hello.b
+# → Hello, Bantu!
 ```
 
-Now any project on this machine can `bantu add my-pkg`. No internet, no registry server, no auth tokens — perfect for VSCode offline workflows.
+## Modular App (v1.2.1 `include`)
 
-### Full command reference
+```bantu
+// server.b
+include "./db.b";              // direct — brings listPosts, getPost, createPost into scope
+include "./routes.b" as routes; // namespaced — exposes routes.registerAll(sua)
 
-```
-PATH INTEGRATION
-  bantu setup                  One-time PATH install (user, no sudo)
-  bantu setup --system         System-wide (needs sudo / admin)
-  bantu setup --seed           Also seed the local registry with starters
-  bantu uninstall              Remove bantu from PATH
-  bantu doctor                 Diagnose install + registry state
-
-PROJECT CREATION
-  bantu init <name>            New CLI project
-  bantu init --web <name>      New Sua web app (Spring Initializer-style)
-  bantu new <name>             Alias of init
-
-PACKAGE MANAGER (offline, npm-style)
-  bantu install                Install all deps from bantu.json
-  bantu add <pkg>[@<ver>]      Add a dep + install it
-  bantu remove <pkg>           Remove a dep + uninstall it
-  bantu update [pkg]           Update one or all deps to latest
-  bantu list                   Show installed packages in this project
-  bantu search [term]          Browse the local registry
-  bantu publish <dir> [--as <n>]   Add a folder to the local registry
-
-RUNNING CODE
-  bantu run [file.b]           Run a Bantu file (default: main.b)
-  bantu build [file.b]         Compile to a standalone shell-script exe
-  bantu                        Start the REPL
-  bantu relay [port]           Start the STUN/TURN relay server
+initDb();
+routes.registerAll(sua);
+sua.server.listen(3000);
 ```
 
-### Where things live
+## Sua Web Framework
 
-| Path | Purpose |
-|------|---------|
-| `~/.local/bin/bantu` (Linux) / `%USERPROFILE%\.bantu\bin\bantu.exe` (Windows) | Installed binary |
-| `~/.bantu/registry/<pkg>/<version>/` | Local package registry (offline) |
-| `./bantu_modules/<pkg>/` | Project-local installed packages |
-| `./bantu.json` | Project manifest (name, version, entry, dependencies) |
+```bantu
+sua.server.get("/api/health", def($req, $res) {
+    $res.json({ "ok": true, "version": "1.2.1" });
+});
 
-## What is this?
+sua.server.post("/api/users", def($req, $res) {
+    $name = $req.body["name"];
+    $id = createUser($name);
+    $res.status(201);
+    $res.json({ "id": $id, "name": $name });
+});
 
-ChatBantu is a real-world test of whether Bantu can serve a production-style web app on its own. It can. The backend is a single `server.b` file interpreted by the native Bantu binary; the frontend is plain HTML, CSS, and JavaScript.
-
-## Features
-
-- **User accounts** — register, login, token-based auth
-- **Social feed** — create posts, like, comment, share
-- **People directory** — discover users, follow / unfollow
-- **Real-time 1-to-1 chat** — polls the server every 1.5 s for new messages
-- **Live presence** — heartbeat every 30 s, "online" badge on users
-- **Real-time notifications** — likes, comments, follows, messages, calls
-- **WebRTC video calls** — full signaling server (offer / answer / ICE) running on Bantu
-- **Persistent SQLite** — data survives restarts (Render disk volume)
-
-## Stack
-
-| Layer        | Technology                                  |
-|--------------|---------------------------------------------|
-| Language     | [Bantu](https://github.com/AsseySilivestir/bantu-lang) v1.2.0 |
-| Web framework| Sua (built into Bantu)                      |
-| Database     | SQLite 3 (file-based)                       |
-| Frontend     | Vanilla HTML / CSS / JS (no framework)      |
-| Real-time    | HTTP polling (chat, presence, notifications)|
-| Video calls  | WebRTC (browser) + Bantu signaling server   |
-| NAT traversal| Google public STUN (`stun:stun.l.google.com`)|
-| Deployment   | Docker → Render                             |
-
-## Repo layout
-
-```
-ChatBantu/
-├── server.b              ← entire backend (one Bantu file)
-├── bantu                 ← native Linux x86_64 Bantu binary (rebuilt for Ubuntu 22.04)
-├── bantu-src/            ← interpreter source (rebuildable via build.sh)
-│   └── compiler/
-│       ├── build.sh           ← one-command rebuild
-│       ├── CMakeLists.txt
-│       ├── src/               ← evaluator, lexer, parser, server, …
-│       └── stubs/             ← GLIBCXX compatibility shim
-├── dev.sh                ← one-command local dev launcher (Linux/Mac)
-├── Makefile              ← common dev tasks (run, build, reset-db, test, …)
-├── Dockerfile            ← production Dockerfile (multi-stage, builds Bantu)
-├── Dockerfile.dev        ← local dev Dockerfile (uses prebuilt binary)
-├── docker-compose.dev.yml← one-command local Docker dev
-├── render.yaml           ← Render blueprint (free tier + 1 GB disk)
-├── .env.example          ← environment variable template
-├── .vscode/launch.json   ← VS Code F5 to start the server
-├── QUICKSTART.md         ← 60-second quick start guide
-├── .dockerignore
-├── .gitignore
-└── public/
-    ├── index.html         ← login / register
-    ├── feed.html          ← social feed (posts, likes, comments)
-    ├── chat.html          ← real-time messaging
-    ├── call.html          ← WebRTC video call
-    ├── people.html        ← user directory
-    ├── notifications.html ← notification feed
-    ├── css/
-    │   └── styles.css     ← full design system
-    └── js/
-        └── api.js         ← frontend API client + helpers
+sua.server.listen(3000);
 ```
 
-## API reference
+## Database Drivers
 
-All endpoints are JSON. Pass `Authorization: Bearer <token>` for authed routes.
+```bantu
+// SQLite (always available)
+sua.sqlite.connect("app.db");
+$rows = sua.sqlite.query("SELECT * FROM users");
 
-| Method | Path                              | Purpose                              |
-|--------|-----------------------------------|--------------------------------------|
-| GET    | `/api/health`                     | Service health                       |
-| POST   | `/api/auth/register`              | Create account                       |
-| POST   | `/api/auth/login`                 | Sign in (returns token)              |
-| GET    | `/api/auth/me`                    | Current user                         |
-| GET    | `/api/users`                      | List users                           |
-| POST   | `/api/users/:id/follow`           | Follow                               |
-| DELETE | `/api/users/:id/follow`           | Unfollow                             |
-| GET    | `/api/posts`                      | Feed (latest 100)                    |
-| POST   | `/api/posts`                      | Create post                          |
-| POST   | `/api/posts/:id/like`             | Toggle like                          |
-| GET    | `/api/posts/:id/comments`         | List comments                        |
-| POST   | `/api/posts/:id/comments`         | Add comment                          |
-| GET    | `/api/messages/:id?since=N`       | Poll new messages                    |
-| POST   | `/api/messages/:id`               | Send message                         |
-| GET    | `/api/conversations`              | Conversation list                    |
-| GET    | `/api/unread`                     | Unread counts                        |
-| POST   | `/api/presence`                   | Heartbeat                            |
-| GET    | `/api/presence`                   | Who's online                         |
-| GET    | `/api/notifications`              | List + mark read                     |
-| POST   | `/api/call/offer/:id`             | WebRTC: send SDP offer               |
-| GET    | `/api/call/offer/:id`             | WebRTC: poll for incoming offer      |
-| POST   | `/api/call/answer/:id`            | WebRTC: send SDP answer              |
-| GET    | `/api/call/answer/:id`            | WebRTC: poll for answer              |
-| POST   | `/api/call/ice/:id`               | WebRTC: send ICE candidate           |
-| GET    | `/api/call/ice/:id`               | WebRTC: poll ICE candidates          |
-| POST   | `/api/call/hangup/:id`            | WebRTC: end call                     |
+// PostgreSQL (real with -DBANTU_POSTGRES=ON)
+sua.postgres.connect("host=localhost dbname=app user=postgres password=secret");
+$rows = sua.postgres.query("SELECT * FROM users");
 
-## Run locally
+// MySQL (real with -DBANTU_MYSQL=ON)
+sua.mysql.connect("localhost", "root", "secret", "app", 3306);
+$rows = sua.mysql.query("SELECT * FROM users");
+```
 
-ChatBantu ships with a one-command local dev launcher. See **`QUICKSTART.md`** for the full guide — short version below.
+## WebRTC (v1.2.1)
 
-### Option A — Native (Linux x86_64, fastest)
+```bantu
+$peer  = sua.webrtc.peer("alice");
+$offer = sua.webrtc.createOffer("alice");
+$chan  = sua.webrtc.dataChannel("chat");
+sua.webrtc.send("chat", "hello, world!");
+```
+
+## Build Windows Installer (v1.2.1)
 
 ```bash
-git clone https://github.com/AsseySilivestir/bantusua-local.git
-cd bantusua-local
-chmod +x dev.sh
-./dev.sh
+# Generates dist/MyApp-Setup-1.0.0.exe (NSIS installer)
+bantu build-windows --name "MyApp" --version "1.0.0"
 ```
 
-The script auto-detects missing libraries and tells you exactly what to install:
-```bash
-sudo apt-get install -y libsqlite3-0 libcurl4 ca-certificates
-```
-
-Common flags:
-```bash
-./dev.sh --port 9000        # use a different port
-./dev.sh --reset-db         # wipe chatbantu.db and reseed
-./dev.sh --build            # rebuild the bantu binary from source first
-./dev.sh --no-browser       # don't auto-open browser
-./dev.sh --help             # show all options
-```
-
-### Option B — Docker (cross-platform, no system deps)
+## Build from Source
 
 ```bash
-./dev.sh --docker
-# or directly:
-docker compose -f docker-compose.dev.yml up --build
+git clone https://github.com/AsseySilivestir/Bantu.git
+cd Bantu/bantu-src/compiler
+mkdir build && cd build
+
+# Default build (stub drivers, ~660 KB binary)
+cmake .. -DCMAKE_BUILD_TYPE=Release
+make -j$(nproc)
+
+# Full build with all real drivers
+cmake .. -DCMAKE_BUILD_TYPE=Release \
+         -DBANTU_POSTGRES=ON \
+         -DBANTU_MYSQL=ON \
+         -DBANTU_WEBRTC=ON
+make -j$(nproc)
+
+sudo cp bantu /usr/local/bin/
+bantu --version    # → Bantu v1.2.1
 ```
 
-### Option C — Makefile shortcuts
-
-```bash
-make run          # foreground server (Ctrl-C to stop)
-make bg           # background server (logs: tail -f /tmp/chatbantu.log)
-make stop         # stop background server
-make test         # curl health + demo login
-make build        # rebuild bantu from source
-make reset-db     # wipe DB
-make help         # show all targets
-```
-
-Open `http://localhost:8080` and sign in with the demo account:
-- **username:** `silivestir`
-- **password:** `bantu123`
-
-## Deploy to Render
-
-The repo includes a `render.yaml` blueprint. In Render:
-
-1. **New → Blueprint** → connect this GitHub repo.
-2. Render will detect `render.yaml` and create the `chatbantu` web service.
-3. The Dockerfile is **multi-stage**: it first builds the Bantu binary inside
-   Ubuntu 22.04 (guaranteeing ABI compatibility), then in the runtime stage
-   installs `libsqlite3-0`, `libcurl4`, and `ca-certificates`, copies the
-   freshly-built Bantu binary and the app, then runs `bantu run server.b`.
-4. Render injects `$PORT` (read by `env("PORT")` in `server.b`).
-5. SQLite is persisted at `/data/chatbantu.db` via a 1 GB disk.
-
-Alternatively, deploy manually:
-
-1. **New → Web Service → Docker** → connect this repo.
-2. Set the Docker build context to the repo root.
-3. Render auto-detects the `Dockerfile` and the `PORT` env var.
-
-## How real-time works
-
-Bantu's HTTP server is **mult-threaded and synchronous** 
-
-- **Chat** — client polls `/api/messages/:id?since=<lastId>` every 1.5 s
-- **Presence** — client POSTs `/api/presence` every 30 s; "online" = heartbeat within last 60 s
-- **Notifications** — polled indirectly via the sidebar badge every 15 s
-- **Video calls** — WebRTC peer connection is established in the browser; the Bantu backend only relays SDP offers/answers and ICE candidates (also polled)
-
-This is enough for a small social network at modest scale. For higher throughput,
-the Bantu interpreter would need a threaded accept loop — a small C++ change
-in `evaluator.hpp` (the `bantuHandleHttpRequest` call site).
-
-## Binary compatibility (Render / Ubuntu 22.04)
-
-Render's free tier runs **Ubuntu 22.04 (jammy)** with **glibc 2.35** and
-**libstdc++ from GCC 11** (max `GLIBCXX_3.4.30`). The Bantu interpreter is
-developed on Debian 13 (glibc 2.41, GCC 14), so a naïve build will fail
-on Render with:
+## Repository Layout
 
 ```
-bantu: /lib/x86_64-linux-gnu/libm.so.6: version `GLIBC_2.38' not found (required by bantu)
-bantu: /lib/x86_64-linux-gnu/libstdc++.so.6: version `GLIBCXX_3.4.32' not found (required by bantu)
+Bantu/
+├── bantu-src/compiler/      # C++17 interpreter (lexer, parser, evaluator, server, package_manager)
+│   ├── src/
+│   │   ├── main.cpp         # CLI entry point (run/build/init/setup/build-windows/bench/...)
+│   │   ├── lexer.hpp        # Tokenizer + keywords
+│   │   ├── parser.hpp       # Recursive-descent parser
+│   │   ├── evaluator.hpp    # Tree-walking evaluator (3.4k lines, includes sua.* framework)
+│   │   ├── module_resolver.hpp  # [v1.2.1] include path resolution
+│   │   └── ...
+│   └── CMakeLists.txt       # Build config (with -DBANTU_POSTGRES/MYSQL/WEBRTC flags)
+├── drivers/                 # [v1.2.1] Optional real-driver glue
+│   ├── postgres_driver.hpp  # libpq wrapper (HAS_LIBPQ)
+│   ├── mysql_driver.hpp     # mysqlclient wrapper (HAS_MYSQL)
+│   └── webrtc_engine.hpp    # libdatachannel wrapper (HAS_RTC)
+├── vscode-extension/        # [v1.2.1] VSCode extension
+│   ├── package.json
+│   ├── syntaxes/bantu.tmLanguage.json
+│   ├── snippets/bantu.json
+│   ├── language/bantu-language-configuration.json
+│   ├── icons/               # blue-B file icon (light + dark)
+│   ├── src/                 # TypeScript sources (extension, completion, hover, symbol, task)
+│   └── README.md
+├── windows-installer/       # [v1.2.1] NSIS template reference
+├── samples/                 # [v1.2.1] Real apps
+│   ├── blogsite/            # Modular Sua + SQLite blog (uses include keyword)
+│   ├── webrtc-chat/         # WebRTC signaling + browser UI
+│   └── pg-dashboard/        # PostgreSQL analytics dashboard
+├── benchmarks/              # [v1.2.1] bench.b + run.sh + results.md
+├── docs/
+│   └── Bantu-Programming-Language-v1.2.1.pdf  # 30-page official guide
+├── windows/                 # Windows .bat helpers (start, stop, reset-db)
+├── public/                  # Sua default static files
+├── README.md                # This file
+├── CHANGELOG.md             # v1.0.0 → v1.1.0 → v1.2.0 → v1.2.1
+├── LICENSE                  # MIT
+└── QUICKSTART.md
 ```
 
-The fix lives in `bantu-src/compiler/`:
+## Documentation
 
-1. **`src/evaluator.hpp`** — replaced `std::strtol` / `std::stoull` / `std::atoi`
-   (which redirect to `__isoc23_strtol@GLIBC_2.38` under `_GNU_SOURCE`) with
-   manual parsers. Replaced `std::fmod` (which pulls `fmod@GLIBC_2.38`) with
-   a manual `a - floor(a/b) * b` implementation.
-2. **`src/main.cpp`** — same treatment for `std::atoi`.
-3. **`stubs/ios_base_library_initv.c`** — provides a no-op
-   `_ZSt21ios_base_library_initv` so the binary doesn't require
-   `GLIBCXX_3.4.32` (only present on GCC 14+ runtimes).
-4. **`CMakeLists.txt` / `build.sh`** — dropped `-march=native`, use
-   `-mtune=generic` for CPU portability across Render's instances.
+- **Official guide:** [`docs/Bantu-Programming-Language-v1.2.1.pdf`](docs/Bantu-Programming-Language-v1.2.1.pdf) — 30 pages, covers every feature
+- **Quick start:** [`QUICKSTART.md`](QUICKSTART.md)
+- **Samples:** [`samples/`](samples/) — three runnable apps
+- **Benchmarks:** [`benchmarks/`](benchmarks/) — run `./benchmarks/run.sh`
+- **VSCode extension:** [`vscode-extension/README.md`](vscode-extension/README.md)
+- **Changelog:** [`CHANGELOG.md`](CHANGELOG.md)
 
-After the fix the binary requires at most `GLIBC_2.34` and `GLIBCXX_3.4.9`,
-both well within Ubuntu 22.04's runtime. Rebuild with:
+## Benchmarks (Reference)
 
-```bash
-cd bantu-src/compiler
-./build.sh   # → produces ./build/bantu
-```
+Generic x86-64 Linux, Ubuntu 22.04, GCC 11, single core, Release build:
 
-## Why Bantu?
+| Benchmark | Bantu v1.2.1 | Node.js 20 | Python 3.11 | Lua 5.4 |
+|---|---|---|---|---|
+| fib(28) | 614 ms | 38 ms | 285 ms | 280 ms |
+| 1M arithmetic loop | 196 ms | 2.4 ms | 38 ms | 9.6 ms |
+| list push 100k | 142 ms | 4.1 ms | 18 ms | 8.1 ms |
+| string concat 10k | 413 ms | 1.9 ms | 9.2 ms | 5.4 ms |
+| dict set 100k | 285 ms | 11 ms | 22 ms | 14 ms |
 
-Bantu is a programming language designed for  developers who need speed, readability,fast deployment.
-This project proves that Bantu + Sua + SQLite can serve a real, multi-user, real-time
-app in production — not just demo scripts. Every line of backend code is `.b`, and the
-only process running on the server is the `bantu` binary.
+Bantu is ~10–100x slower than V8/CPython on tight loops because it's a tree-walking interpreter without a JIT. The trade-off is binary size (~660 KB) and install simplicity (zero dependencies). For I/O-bound web work, the Sua HTTP server uses native sockets and is competitive with Node's `http` module on the same hardware. The v1.3 roadmap includes a register-based bytecode VM targeting 5–10x speedup.
+
+See [`benchmarks/results.md`](benchmarks/results.md) for full numbers and reproduction steps.
+
+## Community
+
+- **Source:** https://github.com/AsseySilivestir/Bantu
+- **Issues:** https://github.com/AsseySilivestir/Bantu/issues
+- **Original fork:** https://github.com/AsseySilivestir/bantusua-local
 
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE).
+
+## Attribution
+
+Bantu was created by **Assey Silivestir Peter**. The language is named after the Bantu language family spoken across sub-Saharan Africa — a nod to the developer's Tanzanian roots and the language's goal of being accessible to developers in low-bandwidth, offline-first environments.
+
+---
+
+*v1.2.1 stable release · June 2026*

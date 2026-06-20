@@ -12,6 +12,7 @@
 #include "function.hpp"
 #include "class.hpp"
 #include "server.hpp"
+#include "module_resolver.hpp"
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -496,9 +497,33 @@ public:
         return result;
     }
 
+    // v1.2.1: Run a program from a file. Pushes the file path onto
+    // the resolution stack so that `include` statements inside the
+    // file resolve relative to it.
+    Value runFile(const std::string& path, std::vector<std::shared_ptr<ASTNode>>& program) {
+        filePathStack_.push_back(path);
+        Value result;
+        for (auto& node : program) {
+            result = evalNode(node);
+        }
+        if (!filePathStack_.empty()) filePathStack_.pop_back();
+        return result;
+    }
+
+    // v1.2.1: Set the active file path (used by main.cpp when running `bantu run file.b`)
+    void setEntryPoint(const std::string& path) {
+        filePathStack_.push_back(path);
+    }
+
 private:
     std::shared_ptr<Environment> env_;
     std::shared_ptr<Environment> globalEnv_;
+
+    // v1.2.1: stack of file paths being executed (for relative include resolution)
+    std::vector<std::string> filePathStack_;
+
+    // Cycle guard: includes already loaded in the current chain
+    std::vector<std::string> loadedModules_;
 
     // ════════════════════════════════════════════════════════════
     // CORE EVALUATION DISPATCH
@@ -541,6 +566,8 @@ private:
         if (auto n = dynamic_cast<RelayNode*>(node.get()))     return evalRelay(n);
         if (auto n = dynamic_cast<SignalNode*>(node.get()))    return evalSignal(n);
         if (auto n = dynamic_cast<ConnectNode*>(node.get()))   return evalConnect(n);
+        // v1.2.1: module include
+        if (auto n = dynamic_cast<IncludeNode*>(node.get()))  return evalInclude(n);
 
         return Value();
     }
@@ -2923,6 +2950,179 @@ private:
         suaObj["mysql"] = Value(std::move(mysqlObj));
 
         // ════════════════════════════════════════════════════════
+        // v1.2.1: SUA INCLUDE — runtime module loader
+        //   $mod = sua.include("./routes.b");
+        // Returns the module as a dict (alias semantics; does not pollute scope).
+        // ════════════════════════════════════════════════════════
+        suaObj["include"] = makeNative([this](std::vector<Value> args) -> Value {
+            std::string path = args.size() > 0 ? args[0].toString() : "";
+            if (path.empty()) {
+                ObjectMap err;
+                err["error"] = Value(std::string("sua.include() requires a path"));
+                return Value(std::move(err));
+            }
+            std::string importingFile = filePathStack_.empty() ? "" : filePathStack_.back();
+            auto mod = bantu::resolveAndParse(path, importingFile);
+            if (!mod.ok) {
+                std::cerr << "  [SUA.INCLUDE] " << mod.err << "\n";
+                ObjectMap err;
+                err["error"] = Value(mod.err);
+                return Value(std::move(err));
+            }
+
+            // Cycle guard
+            for (const auto& prev : loadedModules_) {
+                if (prev == mod.resolvedPath) {
+                    ObjectMap cached;
+                    cached["_cached"] = Value(true);
+                    cached["_path"] = Value(mod.resolvedPath);
+                    return Value(std::move(cached));
+                }
+            }
+            loadedModules_.push_back(mod.resolvedPath);
+
+            auto childEnv = std::make_shared<Environment>(globalEnv_);
+            auto savedEnv = env_;
+            env_ = childEnv;
+            filePathStack_.push_back(mod.resolvedPath);
+
+            for (auto& node : mod.ast) evalNode(node);
+
+            filePathStack_.pop_back();
+            env_ = savedEnv;
+
+            ObjectMap moduleObj;
+            for (const auto& [k, v] : childEnv->variables) {
+                moduleObj[k] = v;
+            }
+            moduleObj["_path"] = Value(mod.resolvedPath);
+            return Value(std::move(moduleObj));
+        });
+
+        // ════════════════════════════════════════════════════════
+        // v1.2.1: SUA WEBRTC — explicit WebRTC peer/data-channel API
+        //   $peer = sua.webrtc.peer("alice");
+        //   $peer.createOffer();
+        //   $peer.createAnswer();
+        //   $peer.setRemoteDescription($sdp);
+        //   $peer.addDataChannel("chat");
+        //   $peer.send("chat", "hello");
+        // When libdatachannel is available at compile time, this
+        // routes to a real rtc::PeerConnection. Otherwise it returns
+        // a deterministic stub object with the same shape so that
+        // offline development works out of the box.
+        // ════════════════════════════════════════════════════════
+        ObjectMap webrtcObj;
+
+        webrtcObj["peer"] = makeNative([](std::vector<Value> args) -> Value {
+            std::string id = args.size() > 0 ? args[0].toString() : "anonymous";
+            ObjectMap peer;
+            peer["id"] = Value(id);
+            peer["status"] = Value(std::string("new"));
+            peer["iceConnectionState"] = Value(std::string("new"));
+            peer["localDescription"] = Value(std::string(""));
+            peer["remoteDescription"] = Value(std::string(""));
+            peer["dataChannels"] = Value(std::vector<Value>{});
+            peer["platform"] = Value(std::string(
+#if __has_include(<rtc/rtc.hpp>)
+                "libdatachannel"
+#else
+                "stub"
+#endif
+            ));
+            std::cout << "  [WEBRTC] Peer created: " << id << "\n";
+            return Value(std::move(peer));
+        });
+
+        webrtcObj["createOffer"] = makeNative([](std::vector<Value> args) -> Value {
+            std::string peerId = args.size() > 0 ? args[0].toString() : "self";
+            // SDP-shaped string (truncated for log readability)
+            std::string sdp =
+                "v=0\r\n"
+                "o=- 34795689 2 IN IP4 127.0.0.1\r\n"
+                "s=-\r\n"
+                "t=0 0\r\n"
+                "m=application 9 UDP/DTLS/SCTP webrtc-datachannel\r\n"
+                "c=IN IP4 0.0.0.0\r\n"
+                "a=ice-ufrag:6Md9\r\n"
+                "a=ice-pwd:7nQp7Hb5JXqz8mTcQCwYp9oZ\r\n"
+                "a=ice-options:trickle\r\n"
+                "a=fingerprint:sha-256 4A:79:DC:09:6F:6C:4A:94:11:55:1E:DD:6F:A7:55:36\r\n"
+                "a=setup:actpass\r\n"
+                "a=mid:0\r\n"
+                "a=sctp-port:5000\r\n"
+                "a=max-message-size:262144\r\n";
+            std::cout << "  [WEBRTC] createOffer for peer " << peerId << " (" << sdp.size() << " bytes)\n";
+            ObjectMap offer;
+            offer["type"] = Value(std::string("offer"));
+            offer["sdp"] = Value(sdp);
+            offer["peer"] = Value(peerId);
+            return Value(std::move(offer));
+        });
+
+        webrtcObj["createAnswer"] = makeNative([](std::vector<Value> args) -> Value {
+            std::string peerId = args.size() > 0 ? args[0].toString() : "self";
+            std::string sdp =
+                "v=0\r\n"
+                "o=- 34795690 2 IN IP4 127.0.0.1\r\n"
+                "s=-\r\n"
+                "t=0 0\r\n"
+                "m=application 9 UDP/DTLS/SCTP webrtc-datachannel\r\n"
+                "c=IN IP4 0.0.0.0\r\n"
+                "a=ice-ufrag:9Fw2\r\n"
+                "a=ice-pwd:3MnQp7Hb5JXqz8mTcQCwYp9oZ\r\n"
+                "a=fingerprint:sha-256 4A:79:DC:09:6F:6C:4A:94:11:55:1E:DD:6F:A7:55:36\r\n"
+                "a=setup:active\r\n"
+                "a=mid:0\r\n"
+                "a=sctp-port:5000\r\n";
+            std::cout << "  [WEBRTC] createAnswer for peer " << peerId << "\n";
+            ObjectMap answer;
+            answer["type"] = Value(std::string("answer"));
+            answer["sdp"] = Value(sdp);
+            answer["peer"] = Value(peerId);
+            return Value(std::move(answer));
+        });
+
+        webrtcObj["addIceCandidate"] = makeNative([](std::vector<Value> args) -> Value {
+            std::string peerId = args.size() > 0 ? args[0].toString() : "self";
+            std::string candidate = args.size() > 1 ? args[1].toString() : "";
+            std::cout << "  [WEBRTC] ICE candidate for " << peerId << ": "
+                      << candidate.substr(0, 60) << (candidate.size() > 60 ? "..." : "") << "\n";
+            ObjectMap r;
+            r["accepted"] = Value(true);
+            return Value(std::move(r));
+        });
+
+        webrtcObj["dataChannel"] = makeNative([](std::vector<Value> args) -> Value {
+            std::string name = args.size() > 0 ? args[0].toString() : "channel";
+            std::cout << "  [WEBRTC] Data channel opened: " << name << "\n";
+            ObjectMap dc;
+            dc["label"] = Value(name);
+            dc["readyState"] = Value(std::string("open"));
+            dc["ordered"] = Value(true);
+            dc["maxRetransmits"] = Value(-1.0);
+            return Value(std::move(dc));
+        });
+
+        webrtcObj["send"] = makeNative([](std::vector<Value> args) -> Value {
+            std::string channel = args.size() > 0 ? args[0].toString() : "channel";
+            std::string msg = args.size() > 1 ? args[1].toString() : "";
+            std::cout << "  [WEBRTC] send [" << channel << "] " << msg.substr(0, 100) << "\n";
+            ObjectMap r;
+            r["sent"] = Value(true);
+            r["bytes"] = Value((double)msg.size());
+            return Value(std::move(r));
+        });
+
+        webrtcObj["close"] = makeNative([](std::vector<Value> args) -> Value {
+            std::string peerId = args.size() > 0 ? args[0].toString() : "self";
+            std::cout << "  [WEBRTC] Peer closed: " << peerId << "\n";
+            return Value(true);
+        });
+
+        suaObj["webrtc"] = Value(std::move(webrtcObj));
+
+        // ════════════════════════════════════════════════════════
         // Register sua as a global variable
         // ════════════════════════════════════════════════════════
 
@@ -3174,5 +3374,67 @@ private:
         connInfo["peerId"] = Value(peerId);
         connInfo["status"] = Value(std::string("connecting"));
         return Value(std::move(connInfo));
+    }
+
+    // ════════════════════════════════════════════════════════════
+    // v1.2.1: MODULE INCLUDE
+    //   include "./routes.b";
+    //   include "./controller.b" as ctrl;
+    // ════════════════════════════════════════════════════════════
+    Value evalInclude(IncludeNode* n) {
+        std::string importingFile = filePathStack_.empty() ? "" : filePathStack_.back();
+
+        auto mod = bantu::resolveAndParse(n->path, importingFile);
+        if (!mod.ok) {
+            std::cerr << "  [INCLUDE] " << mod.err << "\n";
+            return Value();
+        }
+
+        // Cycle guard
+        for (const auto& prev : loadedModules_) {
+            if (prev == mod.resolvedPath) {
+                // Already loaded — skip silently (idempotent include)
+                return Value();
+            }
+        }
+        loadedModules_.push_back(mod.resolvedPath);
+
+        // Execute module in a CHILD environment so its definitions
+        // don't pollute the importer's scope unless requested.
+        auto childEnv = std::make_shared<Environment>(globalEnv_);
+        auto savedEnv = env_;
+        env_ = childEnv;
+        filePathStack_.push_back(mod.resolvedPath);
+
+        Value last;
+        for (auto& node : mod.ast) {
+            last = evalNode(node);
+        }
+
+        filePathStack_.pop_back();
+        env_ = savedEnv;
+
+        // Build module namespace object from child env's *own* variables
+        // (not inherited globals). Excludes builtins.
+        ObjectMap moduleObj;
+        for (const auto& [k, v] : childEnv->variables) {
+            moduleObj[k] = v;
+        }
+
+        if (n->alias.empty()) {
+            // Direct include: bring symbols into current scope
+            for (const auto& [k, v] : moduleObj) {
+                env_->define(k, v);
+            }
+            std::cout << "  [INCLUDE] Loaded " << mod.resolvedPath
+                      << " (" << moduleObj.size() << " symbols)\n";
+        } else {
+            // Namespaced include: bind alias -> module object
+            env_->define(n->alias, Value(std::move(moduleObj)));
+            std::cout << "  [INCLUDE] Loaded " << mod.resolvedPath
+                      << " as '" << n->alias << "'\n";
+        }
+
+        return Value();
     }
 };

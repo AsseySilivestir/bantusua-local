@@ -1,0 +1,161 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Bantu",
+  "scopeName": "source.bantu",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#strings" },
+    { "include": "#numbers" },
+    { "include": "#keywords" },
+    { "include": "#types" },
+    { "include": "#sua-framework" },
+    { "include": "#declarations" },
+    { "include": "#identifiers" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.bantu",
+          "match": "//.*$"
+        },
+        {
+          "name": "comment.block.bantu",
+          "begin": "/\\*",
+          "end": "\\*/",
+          "captures": {
+            "0": { "name": "punctuation.definition.comment.bantu" }
+          }
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.bantu",
+          "begin": "\"",
+          "end": "\"",
+          "beginCaptures": { "0": { "name": "punctuation.definition.string.begin.bantu" } },
+          "endCaptures": { "0": { "name": "punctuation.definition.string.end.bantu" } },
+          "patterns": [
+            {
+              "name": "constant.character.escape.bantu",
+              "match": "\\\\."
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.single.bantu",
+          "begin": "'",
+          "end": "'",
+          "beginCaptures": { "0": { "name": "punctuation.definition.string.begin.bantu" } },
+          "endCaptures": { "0": { "name": "punctuation.definition.string.end.bantu" } },
+          "patterns": [
+            {
+              "name": "constant.character.escape.bantu",
+              "match": "\\\\."
+            }
+          ]
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.bantu",
+          "match": "\\b\\d+\\.\\d+\\b"
+        },
+        {
+          "name": "constant.numeric.bantu",
+          "match": "\\b\\d+\\b"
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.bantu",
+          "match": "\\b(if|else|while|for|each|in|switch|case|default|break|continue|return|try|catch)\\b"
+        },
+        {
+          "name": "keyword.control.module.bantu",
+          "match": "\\b(include|import|export|from|as)\\b"
+        },
+        {
+          "name": "keyword.declaration.bantu",
+          "match": "\\b(def|class|extends|implements|super|new|const|private|public)\\b"
+        },
+        {
+          "name": "keyword.operator.bantu",
+          "match": "\\b(create|delete|update|calc|print|read|db|fetch|await)\\b"
+        },
+        {
+          "name": "keyword.other.webrtc.bantu",
+          "match": "\\b(channel|signal|stun|stream|broadcast|relay|connect|peer|ice|candidate|room|offer|answer)\\b"
+        },
+        {
+          "name": "constant.language.boolean.bantu",
+          "match": "\\b(true|false)\\b"
+        },
+        {
+          "name": "constant.language.null.bantu",
+          "match": "\\bnull\\b"
+        }
+      ]
+    },
+    "types": {
+      "patterns": [
+        {
+          "name": "support.type.primitive.bantu",
+          "match": "\\b(number|string|bool|list|dict|any|func)\\b"
+        }
+      ]
+    },
+    "sua-framework": {
+      "patterns": [
+        {
+          "name": "support.class.framework.bantu",
+          "match": "\\bsua\\b"
+        },
+        {
+          "name": "support.function.framework.bantu",
+          "match": "\\b(server|http|sqlite|postgres|mysql|json|webrtc|include)\\b(?=\\.)"
+        }
+      ]
+    },
+    "declarations": {
+      "patterns": [
+        {
+          "name": "storage.type.variable.bantu",
+          "match": "\\$"
+        },
+        {
+          "name": "meta.function.bantu",
+          "match": "\\bdef\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": { "name": "entity.name.function.bantu" }
+          }
+        },
+        {
+          "name": "meta.class.bantu",
+          "match": "\\bclass\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": { "name": "entity.name.type.class.bantu" }
+          }
+        }
+      ]
+    },
+    "identifiers": {
+      "patterns": [
+        {
+          "name": "entity.name.function.bantu",
+          "match": "\\b([A-Za-z_][A-Za-z0-9_]*)\\s*(?=\\()"
+        },
+        {
+          "name": "variable.other.bantu",
+          "match": "\\b[A-Za-z_][A-Za-z0-9_]*\\b"
+        }
+      ]
+    }
+  }
+}

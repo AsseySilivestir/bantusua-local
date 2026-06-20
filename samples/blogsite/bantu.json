@@ -1,0 +1,7 @@
+{
+  "name": "blogsite",
+  "version": "1.2.1",
+  "description": "Modular blogsite sample — Bantu + Sua + SQLite",
+  "entry": "server.b",
+  "dependencies": {}
+}

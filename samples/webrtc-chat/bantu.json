@@ -1,0 +1,7 @@
+{
+  "name": "webrtc-chat",
+  "version": "1.2.1",
+  "description": "WebRTC chat demo with Sua signaling server",
+  "entry": "server.b",
+  "dependencies": {}
+}

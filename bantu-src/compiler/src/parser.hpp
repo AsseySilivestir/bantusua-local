@@ -64,6 +64,8 @@ private:
         if (check(TokenType::CONTINUE)) { advance(); return std::make_shared<ASTNode>(current().line, current().col); }
         if (check(TokenType::CLASS))    return parseClass();
         if (check(TokenType::CONST))    return parseConstDecl();
+        // v1.2.1: module include
+        if (check(TokenType::INCLUDE))  return parseInclude();
 
         // Type-annotated variable declarations: number, string, bool, list, dict
         if (check(TokenType::TYPE_NUMBER) || check(TokenType::TYPE_STRING) ||
@@ -72,6 +74,24 @@ private:
             check(TokenType::TYPE_FUNC))  return parseTypeDecl();
 
         return parseExpressionStatement();
+    }
+
+    // v1.2.1 — include statement
+    //   include "./routes.b";
+    //   include "./controller.b" as ctrl;
+    std::shared_ptr<ASTNode> parseInclude() {
+        int line = current().line, col = current().col;
+        advance(); // skip 'include'
+        auto pathTok = expect(TokenType::STRING, "Expected string path after 'include'");
+        std::string alias;
+        // optional `as <name>` clause
+        if (check(TokenType::IDENTIFIER) && current().value == "as") {
+            advance(); // skip 'as'
+            auto aliasTok = expect(TokenType::IDENTIFIER, "Expected alias name after 'as'");
+            alias = aliasTok.value;
+        }
+        match(TokenType::SEMICOLON);
+        return std::make_shared<IncludeNode>(pathTok.value, alias, line, col);
     }
 
     std::shared_ptr<ASTNode> parseIf() {
