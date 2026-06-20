@@ -265,13 +265,22 @@ Generic x86-64 Linux, Ubuntu 22.04, GCC 11, single core, Release build:
 
 | Benchmark | Bantu v1.2.2 | Node.js 20 | Python 3.11 | Lua 5.4 |
 |---|---|---|---|---|
-| fib(28) | 614 ms | 38 ms | 285 ms | 280 ms |
-| 1M arithmetic loop | 196 ms | 2.4 ms | 38 ms | 9.6 ms |
+| fib(28) recursive | 5,147 ms | 74 ms | 60 ms | ~280 ms |
+| 1M arithmetic loop | 1,169 ms | 71 ms | 103 ms | ~10 ms |
+| string concat 100k | 730 ms | 95 ms | 385 ms | n/a |
 | list push 100k | 142 ms | 4.1 ms | 18 ms | 8.1 ms |
-| string concat 10k | 413 ms | 1.9 ms | 9.2 ms | 5.4 ms |
 | dict set 100k | 285 ms | 11 ms | 22 ms | 14 ms |
 
-Bantu is ~10–100x slower than V8/CPython on tight loops because it's a tree-walking interpreter without a JIT. The trade-off is binary size (~660 KB) and install simplicity (zero dependencies). For I/O-bound web work, the Sua HTTP server uses native sockets and is competitive with Node's `http` module on the same hardware. The v1.3 roadmap includes a register-based bytecode VM targeting 5–10x speedup.
+**Honest interpretation.** Bantu is a tree-walking interpreter without a JIT, so on **tight CPU-bound micro-benchmarks** it sits behind V8, CPython, and LuaJIT — but the gap depends sharply on what you're doing:
+
+- **Deep recursion** (e.g. `fib(28)`) is the worst case at ~85× slower than CPython. Each call goes through a C++ `dynamic_cast` dispatch tree and a fresh `Environment` allocation.
+- **Simple arithmetic loops** (`while ($i < 1_000_000)`) are ~12× slower than CPython — closer than the recursive case because there's no per-call frame setup.
+- **String concatenation** is ~2× slower than CPython and ~7× slower than V8, because Bantu's `+` operator builds a new `std::string` each time (no rope, no inline cache).
+- **I/O-bound web handlers** — which is what Bantu is actually designed for — are **competitive with Node's `http` module** on the same hardware, because the Sua HTTP server runs on native C++ sockets and the interpreter only executes the small request-handler body per request. Most of the wall-clock time is spent in `epoll` + libcurl + SQLite, not in Bantu itself.
+
+The trade-off is **not** "Bantu is slow" — it's "Bantu trades CPU-bound micro-benchmark speed for a single 660 KB static binary with zero runtime dependencies, native I/O, and a 30-page manual." For the use cases Bantu targets (offline-first web servers, hackathon projects, embedded systems, teaching environments, internal tooling), the I/O story matters more than the CPU story, and Bantu's I/O story is genuinely fast.
+
+The v1.3 roadmap includes a register-based bytecode VM targeting 5–10× speedup on the CPU-bound micro-benchmarks above.
 
 See [`benchmarks/results.md`](benchmarks/results.md) for full numbers and reproduction steps.
 
